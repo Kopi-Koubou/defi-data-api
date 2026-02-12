@@ -1,0 +1,16 @@
+{
+  "projectId": "defi-data-api",
+  "name": "defi-data-api",
+  "currentStage": "idea",
+  "stages": {
+    "idea": { "status": "completed", "completedAt": "2026-02-11" },
+    "prd": { "status": "completed", "completedAt": "2026-02-11" },
+    "prd_review": { "status": "pending" },
+    "design_spec": { "status": "pending" },
+    "tech_spec": { "status": "pending" },
+    "spec_review": { "status": "pending" },
+    "implementation": { "status": "pending" },
+    "qa": { "status": "pending" },
+    "deploy": { "status": "pending" }
+  }
+}
