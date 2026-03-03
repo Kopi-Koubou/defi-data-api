@@ -9,7 +9,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
-import { encodeCursor } from '../utils/cursor.js';
+import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import * as yieldService from '../services/yields.js';
 import type { PoolType } from '../types/index.js';
 
@@ -29,6 +29,27 @@ const historyQuerySchema = z.object({
   interval: z.enum(['1h', '1d', '1w']).optional().default('1d'),
 });
 
+function parseCursorOffset(cursor: string | undefined): number | null {
+  if (!cursor) return 0;
+
+  const decoded = decodeCursor(cursor);
+  if (!decoded) return null;
+
+  const rawOffset = decoded.offset;
+  const offset =
+    typeof rawOffset === 'number'
+      ? rawOffset
+      : typeof rawOffset === 'string'
+      ? Number.parseInt(rawOffset, 10)
+      : Number.NaN;
+
+  if (!Number.isInteger(offset) || offset < 0) {
+    return null;
+  }
+
+  return offset;
+}
+
 export default async function yieldRoutes(fastify: FastifyInstance) {
   // GET /v1/yields - List yields
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -41,6 +62,11 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+    const offset = parseCursorOffset(params.cursor);
+    if (offset === null) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid cursor');
+      return;
+    }
     
     try {
       const { yields, hasMore } = await yieldService.getLatestYields({
@@ -50,11 +76,11 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         poolType: params.pool_type as PoolType | undefined,
         sortBy: params.sort_by,
         limit: params.limit,
-        cursor: params.cursor,
+        cursor: offset > 0 ? String(offset) : undefined,
       });
       
       const nextCursor = hasMore
-        ? encodeCursor({ offset: (params.cursor ? parseInt(params.cursor, 10) || 0 : 0) + params.limit })
+        ? encodeCursor({ offset: offset + params.limit })
         : null;
       
       sendSuccess(reply, yields, meta, 200, {
@@ -82,6 +108,11 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+    const offset = parseCursorOffset(params.cursor);
+    if (offset === null) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid cursor');
+      return;
+    }
     
     try {
       const { yields, hasMore } = await yieldService.getLatestYields({
@@ -91,10 +122,10 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         poolType: params.pool_type as PoolType | undefined,
         sortBy: 'apy',
         limit: 20,
-        cursor: params.cursor,
+        cursor: offset > 0 ? String(offset) : undefined,
       });
       
-      const nextCursor = hasMore ? encodeCursor({ offset: 20 }) : null;
+      const nextCursor = hasMore ? encodeCursor({ offset: offset + 20 }) : null;
       
       sendSuccess(reply, yields, meta, 200, {
         cursor: nextCursor,
@@ -139,11 +170,16 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     
     const params = parseResult.data;
     
-    // Default to last 30 days
+    // Default to last 90 days for MVP historical depth
     const to = params.to ? new Date(params.to) : new Date();
     const from = params.from
       ? new Date(params.from)
-      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+      : new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+    if (from > to) {
+      Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
     
     try {
       const history = await yieldService.getYieldHistory(pool_id, from, to, params.interval);
