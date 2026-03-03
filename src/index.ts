@@ -54,12 +54,8 @@ async function buildServer() {
 
   // Register rate limiting
   await fastify.register(rateLimit, {
-    max: 100,
-    timeWindow: '1 minute',
+    global: false,
     skipOnError: true,
-    keyGenerator: (req) => {
-      return req.apiKey?.id || req.ip;
-    },
   });
 
   // Register Swagger/OpenAPI documentation
@@ -123,6 +119,24 @@ async function buildServer() {
     async (instance) => {
       // Add authentication hook
       instance.addHook('onRequest', authenticateRequest);
+      instance.addHook(
+        'preHandler',
+        instance.rateLimit({
+          max: (request) => request.apiKey?.rateLimit ?? 10,
+          timeWindow: '1 minute',
+          keyGenerator: (request) => request.apiKey?.id || request.ip,
+          errorResponseBuilder: (request) => ({
+            error: {
+              code: 'RATE_LIMITED',
+              message: 'Rate limit exceeded',
+            },
+            meta: {
+              requestId: request.id,
+              latencyMs: 0,
+            },
+          }),
+        })
+      );
       instance.addHook('onSend', async (request, reply) => {
         await trackUsage(request, reply);
       });
