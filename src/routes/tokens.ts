@@ -8,6 +8,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
+import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import { db, pools, tokenPrices } from '../db/index.js';
 import { eq, and, gte, lte, desc, asc, sql, or } from 'drizzle-orm';
 
@@ -18,6 +19,7 @@ const tokenQuerySchema = z.object({
 const priceHistorySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+  chain: z.string().optional().default('ethereum'),
 });
 
 const searchQuerySchema = z.object({
@@ -109,15 +111,13 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
       return;
     }
     
-    const { from, to } = parseResult.data;
-    
-    // Default to last 30 days
-    const toDate = to ? new Date(to) : new Date();
-    const fromDate = from
-      ? new Date(from)
-      : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-    
-    const chain = (request.query as { chain?: string }).chain || 'ethereum';
+    const { from, to, chain } = parseResult.data;
+    const { from: fromDate, to: toDate } = resolveDateRange(from, to, 30);
+
+    if (!isDateRangeValid({ from: fromDate, to: toDate })) {
+      Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
     
     try {
       const history = await db

@@ -6,6 +6,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
+import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import { db, pools, yields } from '../db/index.js';
 import { eq, and, gte, lte, sql, asc } from 'drizzle-orm';
 
@@ -34,12 +35,12 @@ export default async function chainRoutes(fastify: FastifyInstance) {
     }
     
     const { from, to } = parseResult.data;
-    
-    // Default to last 30 days
-    const toDate = to ? new Date(to) : new Date();
-    const fromDate = from
-      ? new Date(from)
-      : new Date(toDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const { from: fromDate, to: toDate } = resolveDateRange(from, to, 30);
+
+    if (!isDateRangeValid({ from: fromDate, to: toDate })) {
+      Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
     
     try {
       // Get all pools on this chain

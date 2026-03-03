@@ -10,6 +10,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
+import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import * as protocolService from '../services/protocols.js';
 
 const historyQuerySchema = z.object({
@@ -82,12 +83,12 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
-    
-    // Default to last 90 days
-    const to = params.to ? new Date(params.to) : new Date();
-    const from = params.from
-      ? new Date(params.from)
-      : new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const { from, to } = resolveDateRange(params.from, params.to, 90);
+
+    if (!isDateRangeValid({ from, to })) {
+      Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
     
     try {
       const history = await protocolService.getProtocolTvlHistory(protocol_id, from, to);
