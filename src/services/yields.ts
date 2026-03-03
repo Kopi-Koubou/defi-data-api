@@ -2,9 +2,9 @@
  * Yield data service
  */
 
-import { eq, and, gte, lte, desc, asc, sql } from 'drizzle-orm';
+import { eq, and, or, gte, lte, gt, lt, desc, asc, sql, type SQL } from 'drizzle-orm';
 import { db, pools, yields, protocols } from '../db/index.js';
-import type { YieldFilters } from '../types/index.js';
+import type { YieldFilters, YieldPaginationCursor } from '../types/index.js';
 
 export interface YieldWithPool {
   poolId: string;
@@ -32,12 +32,17 @@ export interface YieldHistoryPoint {
 
 export async function getLatestYields(
   filters: YieldFilters
-): Promise<{ yields: YieldWithPool[]; hasMore: boolean }> {
+): Promise<{
+  yields: YieldWithPool[];
+  hasMore: boolean;
+  nextCursor: YieldPaginationCursor | null;
+}> {
   const limit = Math.min(filters.limit || 100, 100);
-  const offset = filters.cursor ? parseInt(filters.cursor, 10) || 0 : 0;
+  const sortBy = filters.sortBy || 'tvl';
+  const sortMetric = sortBy === 'apy' ? yields.apyTotal : yields.tvlUsd;
   
   // Build where conditions
-  const conditions = [];
+  const conditions: SQL<unknown>[] = [];
   
   if (filters.chain) {
     conditions.push(eq(pools.chainId, filters.chain));
@@ -49,6 +54,17 @@ export async function getLatestYields(
   
   if (filters.poolType) {
     conditions.push(eq(pools.poolType, filters.poolType));
+  }
+
+  conditions.push(gte(yields.tvlUsd, filters.minTvl || 0));
+
+  if (filters.cursor) {
+    conditions.push(
+      or(
+        lt(sortMetric, filters.cursor.sortValue),
+        and(eq(sortMetric, filters.cursor.sortValue), gt(pools.id, filters.cursor.poolId))
+      ) as SQL<unknown>
+    );
   }
   
   // Get latest yield per pool using a subquery
@@ -77,15 +93,23 @@ export async function getLatestYields(
         eq(yields.timestamp, latestYieldsSubquery.maxTimestamp)
       )
     )
-    .where(conditions.length > 0 ? and(...conditions, gte(yields.tvlUsd, filters.minTvl || 0)) : gte(yields.tvlUsd, filters.minTvl || 0))
-    .orderBy(filters.sortBy === 'apy' ? desc(yields.apyTotal) : desc(yields.tvlUsd))
+    .where(and(...conditions))
+    .orderBy(desc(sortMetric), asc(pools.id))
     .limit(limit + 1)
-    .offset(offset);
+    ;
   
   const hasMore = results.length > limit;
-  const data = results.slice(0, limit).map((row) => formatYieldWithPool(row));
+  const pageRows = results.slice(0, limit);
+  const nextCursor = hasMore && pageRows.length > 0
+    ? {
+        sortBy,
+        sortValue: sortBy === 'apy' ? pageRows[pageRows.length - 1].yield.apyTotal : pageRows[pageRows.length - 1].yield.tvlUsd,
+        poolId: pageRows[pageRows.length - 1].pool.id,
+      }
+    : null;
+  const data = pageRows.map((row) => formatYieldWithPool(row));
   
-  return { yields: data, hasMore };
+  return { yields: data, hasMore, nextCursor };
 }
 
 export async function getYieldByPoolId(poolId: string): Promise<YieldWithPool | null> {

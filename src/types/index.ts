@@ -102,7 +102,13 @@ export interface YieldFilters {
   poolType?: PoolType;
   sortBy?: 'apy' | 'tvl';
   limit?: number;
-  cursor?: string;
+  cursor?: YieldPaginationCursor;
+}
+
+export interface YieldPaginationCursor {
+  sortBy: 'apy' | 'tvl';
+  sortValue: number;
+  poolId: string;
 }
 
 export interface ImpermanentLossInput {
