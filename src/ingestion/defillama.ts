@@ -7,85 +7,18 @@
 import { createHash } from 'crypto';
 import { and, eq, gte } from 'drizzle-orm';
 import { db, pools, protocols, tokenPrices, yields } from '../db/index.js';
+import {
+  CORE_PROTOCOLS,
+  normalizeChain,
+  normalizeProtocol,
+  type CoreProtocolId,
+} from './catalog.js';
 
 const DEFILLAMA_YIELDS_BASE_URL = (process.env.DEFILLAMA_YIELDS_API_URL || 'https://yields.llama.fi').replace(/\/+$/, '');
 const DEFILLAMA_COINS_BASE_URL = (process.env.DEFILLAMA_COINS_API_URL || 'https://coins.llama.fi').replace(/\/+$/, '');
 
 const MAX_REASONABLE_APY = 5000;
 const MAX_REASONABLE_TVL = 10_000_000_000_000;
-
-const CORE_PROTOCOLS = {
-  'aave-v3': {
-    id: 'aave-v3',
-    slug: 'aave-v3',
-    name: 'Aave V3',
-    category: 'lending',
-    url: 'https://aave.com',
-    auditStatus: 'audited',
-    poolType: 'lending',
-  },
-  'compound-v3': {
-    id: 'compound-v3',
-    slug: 'compound-v3',
-    name: 'Compound V3',
-    category: 'lending',
-    url: 'https://compound.finance',
-    auditStatus: 'audited',
-    poolType: 'lending',
-  },
-  'uniswap-v3': {
-    id: 'uniswap-v3',
-    slug: 'uniswap-v3',
-    name: 'Uniswap V3',
-    category: 'dex',
-    url: 'https://uniswap.org',
-    auditStatus: 'audited',
-    poolType: 'lp',
-  },
-  curve: {
-    id: 'curve',
-    slug: 'curve',
-    name: 'Curve Finance',
-    category: 'dex',
-    url: 'https://curve.fi',
-    auditStatus: 'audited',
-    poolType: 'lp',
-  },
-  lido: {
-    id: 'lido',
-    slug: 'lido',
-    name: 'Lido',
-    category: 'liquid-staking',
-    url: 'https://lido.fi',
-    auditStatus: 'audited',
-    poolType: 'staking',
-  },
-} as const;
-
-type CoreProtocolId = keyof typeof CORE_PROTOCOLS;
-
-const PROTOCOL_ALIASES: Record<string, CoreProtocolId> = {
-  aave: 'aave-v3',
-  'aave-v3': 'aave-v3',
-  'compound-v3': 'compound-v3',
-  compound: 'compound-v3',
-  'uniswap-v3': 'uniswap-v3',
-  uniswap: 'uniswap-v3',
-  curve: 'curve',
-  lido: 'lido',
-};
-
-const CHAIN_ALIASES: Record<string, string> = {
-  ethereum: 'ethereum',
-  arbitrum: 'arbitrum',
-  'arbitrum one': 'arbitrum',
-  base: 'base',
-  polygon: 'polygon',
-  'polygon pos': 'polygon',
-  solana: 'solana',
-};
-
-const SUPPORTED_CHAINS = new Set(['ethereum', 'arbitrum', 'base', 'polygon', 'solana']);
 
 interface DefiLlamaPool {
   pool: string;
@@ -183,19 +116,6 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 
   return response.json() as Promise<T>;
-}
-
-function normalizeChain(chain: string): string | null {
-  const normalized = CHAIN_ALIASES[chain.toLowerCase().trim()];
-  if (!normalized) {
-    return null;
-  }
-
-  return SUPPORTED_CHAINS.has(normalized) ? normalized : null;
-}
-
-function normalizeProtocol(project: string): CoreProtocolId | null {
-  return PROTOCOL_ALIASES[project.toLowerCase().trim()] || null;
 }
 
 function splitSymbolPair(symbol: string): { token0Symbol: string; token1Symbol: string | null } {
@@ -591,4 +511,3 @@ export async function runDefiLlamaIngestion(options: IngestionOptions = {}): Pro
   summary.durationMs = Date.now() - startedAt;
   return summary;
 }
-
