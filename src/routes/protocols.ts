@@ -2,6 +2,7 @@
  * Protocol endpoints
  * GET /v1/protocols
  * GET /v1/protocols/:protocol_id
+ * GET /v1/protocols/:protocol_id/audit-status
  * GET /v1/protocols/:protocol_id/tvl/history
  * GET /v1/protocols/:protocol_id/pools
  */
@@ -44,6 +45,25 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
       }
       
       sendSuccess(reply, protocol, meta);
+    } catch (error) {
+      request.log.error(error);
+      Errors.INTERNAL_ERROR(reply, meta);
+    }
+  });
+
+  // GET /v1/protocols/:protocol_id/audit-status
+  fastify.get('/:protocol_id/audit-status', async (request: FastifyRequest, reply: FastifyReply) => {
+    const meta = createResponseMeta();
+    const { protocol_id } = request.params as { protocol_id: string };
+
+    try {
+      const auditStatus = await protocolService.getProtocolAuditStatus(protocol_id);
+      if (!auditStatus) {
+        Errors.NOT_FOUND(reply, meta, 'Protocol');
+        return;
+      }
+
+      sendSuccess(reply, auditStatus, meta);
     } catch (error) {
       request.log.error(error);
       Errors.INTERNAL_ERROR(reply, meta);
