@@ -13,6 +13,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     apiKey?: {
       id: string;
+      userId: string;
       tier: string;
       rateLimit: number;
       requestQuota: number;
@@ -78,6 +79,7 @@ export async function authenticateRequest(
   // Attach API key info to request
   request.apiKey = {
     id: keyRecord.id,
+    userId: keyRecord.userId,
     tier: keyRecord.tier,
     rateLimit: keyRecord.rateLimit,
     requestQuota: keyRecord.requestQuota,

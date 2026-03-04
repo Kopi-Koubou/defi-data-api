@@ -20,6 +20,7 @@ import toolsRoutes from './routes/tools.js';
 import tokenRoutes from './routes/tokens.js';
 import chainRoutes from './routes/chains.js';
 import poolRoutes from './routes/pools.js';
+import webhookRoutes from './routes/webhooks.js';
 
 // Import middleware
 import { authenticateRequest, trackUsage } from './middleware/auth.js';
@@ -95,6 +96,7 @@ async function buildServer() {
         { name: 'Tokens', description: 'Token price and metadata endpoints' },
         { name: 'Chains', description: 'Chain-level data endpoints' },
         { name: 'Pools', description: 'Pool-level analytics endpoints' },
+        { name: 'Webhooks', description: 'Webhook subscription endpoints' },
         { name: 'Health', description: 'Health check endpoints' },
       ],
     },
@@ -150,6 +152,7 @@ async function buildServer() {
       await instance.register(tokenRoutes, { prefix: '/tokens' });
       await instance.register(chainRoutes, { prefix: '/chains' });
       await instance.register(poolRoutes, { prefix: '/pools' });
+      await instance.register(webhookRoutes, { prefix: '/webhooks' });
     },
     { prefix: '/v1' }
   );
