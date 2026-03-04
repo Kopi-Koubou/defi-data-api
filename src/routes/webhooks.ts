@@ -130,7 +130,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
     }
 
     const { active, limit } = parseResult.data;
-    const conditions: SQL<unknown>[] = [eq(webhookSubscriptions.apiKeyId, request.apiKey!.id)];
+    const conditions: SQL<unknown>[] = [eq(webhookSubscriptions.userId, request.apiKey!.userId)];
     if (typeof active === 'boolean') {
       conditions.push(eq(webhookSubscriptions.active, active));
     }
@@ -180,7 +180,7 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
       const webhook = await db.query.webhookSubscriptions.findFirst({
         where: and(
           eq(webhookSubscriptions.id, webhook_id),
-          eq(webhookSubscriptions.apiKeyId, request.apiKey!.id)
+          eq(webhookSubscriptions.userId, request.apiKey!.userId)
         ),
       });
 

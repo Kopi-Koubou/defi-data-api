@@ -48,7 +48,7 @@ export default async function chainRoutes(fastify: FastifyInstance) {
     }
     
     const { from, to } = parseResult.data;
-    const defaultLookbackDays = getDefaultHistoryLookbackDays(30, request.apiKey?.tier);
+    const defaultLookbackDays = getDefaultHistoryLookbackDays(90, request.apiKey?.tier);
     const { from: fromDate, to: toDate } = resolveDateRange(from, to, defaultLookbackDays);
 
     if (!isDateRangeValid({ from: fromDate, to: toDate })) {
