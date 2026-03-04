@@ -43,6 +43,12 @@ interface TokenInfo {
   decimals: number;
   priceUsd: number | null;
   updatedAt: Date | null;
+  deployments: string[];
+  logoUri: string | null;
+}
+
+function normalizeAddress(address: string): string {
+  return address.trim().toLowerCase();
 }
 
 export default async function tokenRoutes(fastify: FastifyInstance) {
@@ -50,6 +56,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
   fastify.get('/:address', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { address } = request.params as { address: string };
+    const normalizedAddress = normalizeAddress(address);
     
     const parseResult = tokenQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -65,45 +72,82 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     try {
-      // Get latest price for the token
-      const latestPrice = await db.query.tokenPrices.findFirst({
-        where: and(
-          eq(tokenPrices.tokenAddress, address.toLowerCase()),
-          eq(tokenPrices.chainId, normalizedChain)
-        ),
-        orderBy: desc(tokenPrices.timestamp),
-      });
-      
-      // Try to get token info from pools (where it appears as token0 or token1)
-      const pool = await db.query.pools.findFirst({
-        where: or(
-          and(
-            eq(pools.token0Address, address.toLowerCase()),
-            eq(pools.chainId, normalizedChain)
+      const [latestPrice, poolOnChain] = await Promise.all([
+        db.query.tokenPrices.findFirst({
+          where: and(
+            eq(tokenPrices.tokenAddress, normalizedAddress),
+            eq(tokenPrices.chainId, normalizedChain)
           ),
-          and(
-            eq(pools.token1Address, address.toLowerCase()),
-            eq(pools.chainId, normalizedChain)
-          )
-        ),
-      });
-      
-      if (!pool && !latestPrice) {
+          orderBy: desc(tokenPrices.timestamp),
+        }),
+        db.query.pools.findFirst({
+          where: or(
+            and(
+              eq(pools.token0Address, normalizedAddress),
+              eq(pools.chainId, normalizedChain)
+            ),
+            and(
+              eq(pools.token1Address, normalizedAddress),
+              eq(pools.chainId, normalizedChain)
+            )
+          ),
+        }),
+      ]);
+
+      if (!poolOnChain && !latestPrice) {
         Errors.NOT_FOUND(reply, meta, 'Token');
         return;
       }
-      
-      // Determine if token is token0 or token1 in the pool
-      const isToken0 = pool?.token0Address.toLowerCase() === address.toLowerCase();
-      
+
+      const metadataPool =
+        poolOnChain ||
+        (await db.query.pools.findFirst({
+          where: or(
+            eq(pools.token0Address, normalizedAddress),
+            eq(pools.token1Address, normalizedAddress)
+          ),
+        }));
+
+      const [poolDeploymentRows, priceDeploymentRows] = await Promise.all([
+        db
+          .selectDistinct({
+            chainId: pools.chainId,
+          })
+          .from(pools)
+          .where(
+            or(
+              eq(pools.token0Address, normalizedAddress),
+              eq(pools.token1Address, normalizedAddress)
+            )
+          ),
+        db
+          .selectDistinct({
+            chainId: tokenPrices.chainId,
+          })
+          .from(tokenPrices)
+          .where(eq(tokenPrices.tokenAddress, normalizedAddress)),
+      ]);
+
+      const allowedChains = getAllowedChains(request.apiKey?.tier);
+      const deploymentSet = new Set([
+        ...poolDeploymentRows.map((row) => row.chainId),
+        ...priceDeploymentRows.map((row) => row.chainId),
+      ]);
+      const deployments = Array.from(deploymentSet)
+        .filter((chainId) => !allowedChains || allowedChains.includes(chainId))
+        .sort();
+
+      const isToken0 = metadataPool?.token0Address.toLowerCase() === normalizedAddress;
       const tokenInfo: TokenInfo = {
-        address: address.toLowerCase(),
+        address: normalizedAddress,
         chainId: normalizedChain,
-        symbol: isToken0 ? pool!.token0Symbol : (pool?.token1Symbol || 'UNKNOWN'),
-        name: isToken0 ? pool!.token0Symbol : (pool?.token1Symbol || 'Unknown Token'),
-        decimals: isToken0 ? pool!.token0Decimals : (pool?.token1Decimals || 18),
+        symbol: isToken0 ? metadataPool!.token0Symbol : (metadataPool?.token1Symbol || 'UNKNOWN'),
+        name: isToken0 ? metadataPool!.token0Symbol : (metadataPool?.token1Symbol || 'Unknown Token'),
+        decimals: isToken0 ? metadataPool!.token0Decimals : (metadataPool?.token1Decimals || 18),
         priceUsd: latestPrice?.priceUsd ?? null,
         updatedAt: latestPrice?.timestamp ?? null,
+        deployments,
+        logoUri: null,
       };
       
       sendSuccess(reply, tokenInfo, meta);
@@ -117,6 +161,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
   fastify.get('/:address/price/history', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { address } = request.params as { address: string };
+    const normalizedAddress = normalizeAddress(address);
     
     const parseResult = priceHistorySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -153,7 +198,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         .from(tokenPrices)
         .where(
           and(
-            eq(tokenPrices.tokenAddress, address.toLowerCase()),
+            eq(tokenPrices.tokenAddress, normalizedAddress),
             eq(tokenPrices.chainId, normalizedChain),
             gte(tokenPrices.timestamp, fromDate),
             lte(tokenPrices.timestamp, toDate)
@@ -166,7 +211,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         // Check if token exists
         const tokenExists = await db.query.tokenPrices.findFirst({
           where: and(
-            eq(tokenPrices.tokenAddress, address.toLowerCase()),
+            eq(tokenPrices.tokenAddress, normalizedAddress),
             eq(tokenPrices.chainId, normalizedChain)
           ),
         });
@@ -175,8 +220,14 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
           // Try to find in pools
           const pool = await db.query.pools.findFirst({
             where: or(
-              eq(pools.token0Address, address.toLowerCase()),
-              eq(pools.token1Address, address.toLowerCase())
+              and(
+                eq(pools.token0Address, normalizedAddress),
+                eq(pools.chainId, normalizedChain)
+              ),
+              and(
+                eq(pools.token1Address, normalizedAddress),
+                eq(pools.chainId, normalizedChain)
+              )
             ),
           });
           
@@ -236,21 +287,26 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
       const tokenMap = new Map<string, TokenInfo>();
       
       for (const pool of poolResults) {
+        const token0Address = pool.token0Address.toLowerCase();
+        const token1Address = pool.token1Address?.toLowerCase() || null;
+
         // Token0
         if (
           pool.token0Symbol.toLowerCase().includes(searchTerm) ||
-          pool.token0Address.toLowerCase().includes(searchTerm)
+          token0Address.includes(searchTerm)
         ) {
-          const key = `${pool.chainId}-${pool.token0Address}`;
+          const key = `${pool.chainId}-${token0Address}`;
           if (!tokenMap.has(key)) {
             tokenMap.set(key, {
-              address: pool.token0Address,
+              address: token0Address,
               chainId: pool.chainId,
               symbol: pool.token0Symbol,
               name: pool.token0Symbol,
               decimals: pool.token0Decimals,
               priceUsd: null,
               updatedAt: null,
+              deployments: [pool.chainId],
+              logoUri: null,
             });
           }
         }
@@ -258,19 +314,22 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         // Token1
         if (
           pool.token1Symbol &&
+          token1Address &&
           (pool.token1Symbol.toLowerCase().includes(searchTerm) ||
-            pool.token1Address?.toLowerCase().includes(searchTerm))
+            token1Address.includes(searchTerm))
         ) {
-          const key = `${pool.chainId}-${pool.token1Address}`;
+          const key = `${pool.chainId}-${token1Address}`;
           if (!tokenMap.has(key)) {
             tokenMap.set(key, {
-              address: pool.token1Address || '',
+              address: token1Address,
               chainId: pool.chainId,
               symbol: pool.token1Symbol,
               name: pool.token1Symbol,
               decimals: pool.token1Decimals || 18,
               priceUsd: null,
               updatedAt: null,
+              deployments: [pool.chainId],
+              logoUri: null,
             });
           }
         }
@@ -293,11 +352,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
           .orderBy(tokenPrices.tokenAddress, tokenPrices.chainId, desc(tokenPrices.timestamp));
         
         const priceMap = new Map(
-          prices.map((p) => [`${p.chainId}-${p.tokenAddress}`, p])
+          prices.map((p) => [`${p.chainId}-${p.tokenAddress.toLowerCase()}`, p])
         );
         
         for (const token of tokens) {
-          const price = priceMap.get(`${token.chainId}-${token.address}`);
+          const price = priceMap.get(`${token.chainId}-${token.address.toLowerCase()}`);
           if (price) {
             token.priceUsd = price.priceUsd;
             token.updatedAt = price.timestamp;
