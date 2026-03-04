@@ -70,8 +70,8 @@ Optional backfill controls:
 - `GET /v1/tokens/search?q=ETH` - Search tokens
 
 ### Tools
-- `GET /v1/tools/impermanent-loss` - Calculate IL for a pair
-- `POST /v1/tools/impermanent-loss/simulate` - Batch IL simulation
+- `GET /v1/tools/impermanent-loss` - Calculate IL for a pair (optional `fee_apr` + `days` for fee-adjusted net return)
+- `POST /v1/tools/impermanent-loss/simulate` - Batch IL simulation (optional `fee_apr` + `days`)
 
 ### Chains
 - `GET /v1/chains/:chain_id/tvl` - Chain TVL history

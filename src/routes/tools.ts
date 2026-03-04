@@ -7,13 +7,20 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
-import { calculateImpermanentLoss, simulateILScenarios } from '../utils/il-calculator.js';
+import {
+  calculateILWithFees,
+  calculateImpermanentLoss,
+  simulateILScenarios,
+  simulateILScenariosWithFees,
+} from '../utils/il-calculator.js';
 
 const ilQuerySchema = z.object({
   token0: z.string().min(1).max(10),
   token1: z.string().min(1).max(10),
   entry_price_ratio: z.coerce.number().positive(),
   current_price_ratio: z.coerce.number().positive(),
+  fee_apr: z.coerce.number().min(0).max(1000).optional(),
+  days: z.coerce.number().int().min(1).max(3650).optional(),
 });
 
 const ilSimulateSchema = z.object({
@@ -21,7 +28,24 @@ const ilSimulateSchema = z.object({
   token1: z.string().min(1).max(10),
   entry_price_ratio: z.coerce.number().positive(),
   price_changes: z.array(z.number()).min(1).max(20),
+  fee_apr: z.coerce.number().min(0).max(1000).optional(),
+  days: z.coerce.number().int().min(1).max(3650).optional(),
 });
+
+function areFeeInputsValid(
+  feeApr: number | undefined,
+  days: number | undefined
+): { valid: boolean; withFees: boolean } {
+  const withFees = feeApr !== undefined || days !== undefined;
+  if (!withFees) {
+    return { valid: true, withFees: false };
+  }
+
+  return {
+    valid: feeApr !== undefined && days !== undefined,
+    withFees: true,
+  };
+}
 
 export default async function toolsRoutes(fastify: FastifyInstance) {
   // GET /v1/tools/impermanent-loss - Calculate IL for a pair
@@ -35,14 +59,24 @@ export default async function toolsRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+
+    const feeValidation = areFeeInputsValid(params.fee_apr, params.days);
+    if (!feeValidation.valid) {
+      Errors.BAD_REQUEST(reply, meta, '`fee_apr` and `days` must be provided together');
+      return;
+    }
     
     try {
-      const result = calculateImpermanentLoss({
+      const input = {
         token0: params.token0,
         token1: params.token1,
         entryPriceRatio: params.entry_price_ratio,
         currentPriceRatio: params.current_price_ratio,
-      });
+      };
+
+      const result = feeValidation.withFees
+        ? calculateILWithFees(input, params.fee_apr!, params.days!)
+        : calculateImpermanentLoss(input);
       
       sendSuccess(reply, result, meta);
     } catch (error) {
@@ -62,23 +96,40 @@ export default async function toolsRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+
+    const feeValidation = areFeeInputsValid(params.fee_apr, params.days);
+    if (!feeValidation.valid) {
+      Errors.BAD_REQUEST(reply, meta, '`fee_apr` and `days` must be provided together');
+      return;
+    }
     
     try {
-      const scenarios = simulateILScenarios(
+      const baseInput = {
+        token0: params.token0,
+        token1: params.token1,
+        entryPriceRatio: params.entry_price_ratio,
+      };
+
+      const scenarios = feeValidation.withFees
+        ? simulateILScenariosWithFees(
+            baseInput,
+            params.price_changes,
+            params.fee_apr!,
+            params.days!
+          )
+        : simulateILScenarios(baseInput, params.price_changes);
+      
+      sendSuccess(
+        reply,
         {
           token0: params.token0,
           token1: params.token1,
           entryPriceRatio: params.entry_price_ratio,
+          ...(feeValidation.withFees ? { feeApr: params.fee_apr, days: params.days } : {}),
+          scenarios,
         },
-        params.price_changes
+        meta
       );
-      
-      sendSuccess(reply, {
-        token0: params.token0,
-        token1: params.token1,
-        entryPriceRatio: params.entry_price_ratio,
-        scenarios,
-      }, meta);
     } catch (error) {
       request.log.error(error);
       Errors.INTERNAL_ERROR(reply, meta);

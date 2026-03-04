@@ -72,3 +72,33 @@ export function simulateILScenarios(
     };
   });
 }
+
+export function simulateILScenariosWithFees(
+  baseInput: Omit<ImpermanentLossInput, 'currentPriceRatio'>,
+  priceChanges: number[],
+  feeApr: number,
+  days: number
+): Array<
+  ImpermanentLossResult & {
+    feeIncomePercentage: number;
+    netReturnPercentage: number;
+    priceChangePercent: number;
+  }
+> {
+  return priceChanges.map((change) => {
+    const currentPriceRatio = baseInput.entryPriceRatio * (1 + change);
+    const result = calculateILWithFees(
+      {
+        ...baseInput,
+        currentPriceRatio,
+      },
+      feeApr,
+      days
+    );
+
+    return {
+      ...result,
+      priceChangePercent: change * 100,
+    };
+  });
+}
