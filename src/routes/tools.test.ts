@@ -8,6 +8,17 @@ describe('tools routes', () => {
 
   beforeEach(async () => {
     app = Fastify({ logger: false });
+    app.addHook('onRequest', async (request) => {
+      const tierHeader = request.headers['x-test-tier'];
+      const tier = typeof tierHeader === 'string' ? tierHeader : 'builder';
+      request.apiKey = {
+        id: 'test-key',
+        userId: 'user-1',
+        tier,
+        rateLimit: 1000,
+        requestQuota: 50000,
+      };
+    });
     await app.register(toolsRoutes, { prefix: '/tools' });
   });
 
@@ -37,6 +48,20 @@ describe('tools routes', () => {
     expect(response.statusCode).toBe(400);
     const payload = response.json();
     expect(payload.error.code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects fee-adjusted IL for free tier', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tools/impermanent-loss?token0=ETH&token1=USDC&entry_price_ratio=2000&current_price_ratio=2500&fee_apr=12&days=30',
+      headers: {
+        'x-test-tier': 'free',
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    const payload = response.json();
+    expect(payload.error.code).toBe('FORBIDDEN');
   });
 
   it('simulates IL scenarios with fees for valid POST payloads', async () => {
@@ -77,5 +102,25 @@ describe('tools routes', () => {
     expect(response.statusCode).toBe(400);
     const payload = response.json();
     expect(payload.error.code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects batch simulation for free tier', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/impermanent-loss/simulate',
+      headers: {
+        'x-test-tier': 'free',
+      },
+      payload: {
+        token0: 'ETH',
+        token1: 'USDC',
+        entry_price_ratio: 2000,
+        price_changes: [-0.2, 0.2],
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    const payload = response.json();
+    expect(payload.error.code).toBe('FORBIDDEN');
   });
 });

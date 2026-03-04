@@ -7,6 +7,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
+import { hasAdvancedIlAccess } from '../utils/tier.js';
 import {
   InvalidImpermanentLossInputError,
   calculateILWithFees,
@@ -66,6 +67,11 @@ export default async function toolsRoutes(fastify: FastifyInstance) {
       Errors.BAD_REQUEST(reply, meta, '`fee_apr` and `days` must be provided together');
       return;
     }
+
+    if (feeValidation.withFees && !hasAdvancedIlAccess(request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, 'Fee-adjusted IL is available on paid tiers');
+      return;
+    }
     
     try {
       const input = {
@@ -94,6 +100,11 @@ export default async function toolsRoutes(fastify: FastifyInstance) {
   // POST /v1/tools/impermanent-loss/simulate - Batch simulation
   fastify.post('/impermanent-loss/simulate', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
+
+    if (!hasAdvancedIlAccess(request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, 'Batch IL simulation is available on paid tiers');
+      return;
+    }
     
     const parseResult = ilSimulateSchema.safeParse(request.body);
     if (!parseResult.success) {
