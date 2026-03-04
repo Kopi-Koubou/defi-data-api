@@ -1,32 +1,32 @@
 # Implementation Report
 
 ## Summary
-- Implemented keyset-based cursor pagination for yield listing endpoints to align with PRD API design principles.
-- Added typed yield cursor utilities with strict validation (`sort_by`, `sort_value`, `pool_id`).
-- Refactored yield service pagination logic from offset semantics to stable keyset ordering with tie-breakers.
-- Updated `/v1/yields` and `/v1/yields/top` to decode and emit keyset cursors.
-- Added unit tests for the new yield cursor utility behavior.
-- `design-spec.md` and `tech-spec.md` were not present in this repository; scope decisions were based on `prd.md` and existing implementation.
+- Read `prd.md` and verified `design-spec.md` / `tech-spec.md` are missing in the repository.
+- Implemented `GET /v1/pools/:pool_id/il/history` for historical impermanent loss analytics.
+- Added pool service logic to aggregate token prices by interval (`1h`, `1d`, `1w`) and compute IL over time.
+- Added reusable IL history computation utilities plus unit tests.
+- Registered `/v1/pools` routes in the API server and documented the new endpoint in `README.md`.
 
 ## Changed Files
-- `src/routes/yields.ts`
-- `src/services/yields.ts`
-- `src/types/index.ts`
-- `src/utils/yield-cursor.ts`
-- `src/utils/yield-cursor.test.ts`
+- `src/routes/pools.ts`
+- `src/services/pools.ts`
+- `src/utils/il-history.ts`
+- `src/utils/il-history.test.ts`
+- `src/index.ts`
+- `README.md`
 
 ## Tests Run
 - `npm test`
-  - Result: pass (`5` test files, `16` tests)
+  - Result: pass (`6` test files, `18` tests)
 - `npm run build`
   - Result: pass (`tsc`)
 
 ## Known Risks
-- Existing clients using older offset-style cursor payloads will receive `Invalid cursor` and must restart pagination from the first page.
-- Keyset pagination uses floating-point sort values (`apy`/`tvl`); while stable with `pool_id` tie-breakers, edge cases around equal float precision can still be subtle.
-- No route-level integration tests currently assert end-to-end pagination behavior against a seeded database.
+- IL history requires both token prices in the same time bucket; sparse price coverage can produce empty histories.
+- Entry price ratio is anchored to the first available datapoint in the requested window, so results can differ by query range.
+- Coverage is currently unit-level for IL math utilities; endpoint integration tests against seeded DB data are still missing.
 
 ## Next Steps
-1. Add integration tests for `/v1/yields` and `/v1/yields/top` cursor progression and invalid-cursor handling.
-2. Consider a short transition period accepting legacy cursors and returning a deprecation warning.
-3. Add or restore `design-spec.md` and `tech-spec.md` to remove scope ambiguity for upcoming implementation cycles.
+1. Add integration tests for `/v1/pools/:pool_id/il/history` with seeded pools and token prices.
+2. Add optional fee-adjusted IL outputs when product scope requires fee-income netting in history responses.
+3. Restore or add `design-spec.md` and `tech-spec.md` to remove scope ambiguity for future implementation passes.
