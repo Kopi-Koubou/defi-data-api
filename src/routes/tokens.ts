@@ -139,7 +139,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
       return;
     }
 
-    if (!isDateWithinHistoryWindow(fromDate, request.apiKey?.tier, toDate)) {
+    if (!isDateWithinHistoryWindow(fromDate, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }

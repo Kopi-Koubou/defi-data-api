@@ -96,7 +96,7 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
       return;
     }
 
-    if (!isDateWithinHistoryWindow(from, request.apiKey?.tier, to)) {
+    if (!isDateWithinHistoryWindow(from, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }
