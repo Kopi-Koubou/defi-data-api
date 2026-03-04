@@ -10,9 +10,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import {
+  buildChainLimitMessage,
   buildHistoryLimitMessage,
+  getAllowedChains,
   getDefaultHistoryLookbackDays,
   hasRiskAccess,
+  isChainAllowed,
   isDateWithinHistoryWindow,
 } from '../utils/tier.js';
 import { decodeYieldCursor, encodeYieldCursor } from '../utils/yield-cursor.js';
@@ -58,6 +61,13 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+    const requestedChain = params.chain?.toLowerCase();
+    if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
+
+    const tierChainFilter = !requestedChain ? getAllowedChains(request.apiKey?.tier) : undefined;
     const cursor = decodeYieldCursor(params.cursor, params.sort_by);
     if (params.cursor && !cursor) {
       Errors.BAD_REQUEST(reply, meta, 'Invalid cursor');
@@ -66,7 +76,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     
     try {
       const { yields, hasMore, nextCursor } = await yieldService.getLatestYields({
-        chain: params.chain,
+        chain: requestedChain,
+        chains: tierChainFilter || undefined,
         protocol: params.protocol,
         minTvl: params.min_tvl,
         poolType: params.pool_type as PoolType | undefined,
@@ -102,6 +113,13 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+    const requestedChain = params.chain?.toLowerCase();
+    if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
+
+    const tierChainFilter = !requestedChain ? getAllowedChains(request.apiKey?.tier) : undefined;
     const cursor = decodeYieldCursor(params.cursor, 'apy');
     if (params.cursor && !cursor) {
       Errors.BAD_REQUEST(reply, meta, 'Invalid cursor');
@@ -110,7 +128,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     
     try {
       const { yields, hasMore, nextCursor } = await yieldService.getLatestYields({
-        chain: params.chain,
+        chain: requestedChain,
+        chains: tierChainFilter || undefined,
         protocol: params.protocol,
         minTvl: params.min_tvl ?? 100000, // Default $100K min TVL for top
         poolType: params.pool_type as PoolType | undefined,

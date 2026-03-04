@@ -2,7 +2,7 @@
  * Yield data service
  */
 
-import { eq, and, or, gte, lte, gt, lt, desc, asc, sql, type SQL } from 'drizzle-orm';
+import { eq, and, or, gte, lte, gt, lt, desc, asc, inArray, sql, type SQL } from 'drizzle-orm';
 import { db, pools, yields, protocols } from '../db/index.js';
 import type { YieldFilters, YieldPaginationCursor } from '../types/index.js';
 
@@ -46,6 +46,8 @@ export async function getLatestYields(
   
   if (filters.chain) {
     conditions.push(eq(pools.chainId, filters.chain));
+  } else if (filters.chains && filters.chains.length > 0) {
+    conditions.push(inArray(pools.chainId, filters.chains));
   }
   
   if (filters.protocol) {

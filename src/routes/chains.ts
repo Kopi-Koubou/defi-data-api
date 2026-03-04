@@ -8,8 +8,10 @@ import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import {
+  buildChainLimitMessage,
   buildHistoryLimitMessage,
   getDefaultHistoryLookbackDays,
+  isChainAllowed,
   isDateWithinHistoryWindow,
 } from '../utils/tier.js';
 import { db, pools, yields } from '../db/index.js';
@@ -32,6 +34,12 @@ export default async function chainRoutes(fastify: FastifyInstance) {
   fastify.get('/:chain_id/tvl', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { chain_id } = request.params as { chain_id: string };
+    const normalizedChainId = chain_id.toLowerCase();
+
+    if (!isChainAllowed(normalizedChainId, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
     
     const parseResult = historyQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -58,7 +66,7 @@ export default async function chainRoutes(fastify: FastifyInstance) {
       const chainPools = await db
         .select({ id: pools.id })
         .from(pools)
-        .where(eq(pools.chainId, chain_id));
+        .where(eq(pools.chainId, normalizedChainId));
       
       if (chainPools.length === 0) {
         Errors.NOT_FOUND(reply, meta, 'Chain');
@@ -89,7 +97,7 @@ export default async function chainRoutes(fastify: FastifyInstance) {
       const protocolCount = await db
         .select({ count: sql<number>`COUNT(DISTINCT ${pools.protocolId})`.as('count') })
         .from(pools)
-        .where(eq(pools.chainId, chain_id))
+        .where(eq(pools.chainId, normalizedChainId))
         .then((r) => r[0]?.count || 0);
       
       const history: ChainTvlPoint[] = results.map((r) => ({
@@ -116,7 +124,7 @@ export default async function chainRoutes(fastify: FastifyInstance) {
       sendSuccess(
         reply,
         {
-          chain: chain_id,
+          chain: normalizedChainId,
           currentTvlUsd: Math.round(currentStats?.tvlUsd || 0),
           protocolCount,
           poolCount: chainPools.length,

@@ -10,12 +10,15 @@ import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import {
+  buildChainLimitMessage,
   buildHistoryLimitMessage,
+  getAllowedChains,
   getDefaultHistoryLookbackDays,
+  isChainAllowed,
   isDateWithinHistoryWindow,
 } from '../utils/tier.js';
 import { db, pools, tokenPrices } from '../db/index.js';
-import { eq, and, gte, lte, desc, asc, sql, or } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, asc, inArray, sql, or } from 'drizzle-orm';
 
 const tokenQuerySchema = z.object({
   chain: z.string().default('ethereum'),
@@ -55,13 +58,18 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { chain } = parseResult.data;
+    const normalizedChain = chain.toLowerCase();
+    if (!isChainAllowed(normalizedChain, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
     
     try {
       // Get latest price for the token
       const latestPrice = await db.query.tokenPrices.findFirst({
         where: and(
           eq(tokenPrices.tokenAddress, address.toLowerCase()),
-          eq(tokenPrices.chainId, chain)
+          eq(tokenPrices.chainId, normalizedChain)
         ),
         orderBy: desc(tokenPrices.timestamp),
       });
@@ -71,11 +79,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         where: or(
           and(
             eq(pools.token0Address, address.toLowerCase()),
-            eq(pools.chainId, chain)
+            eq(pools.chainId, normalizedChain)
           ),
           and(
             eq(pools.token1Address, address.toLowerCase()),
-            eq(pools.chainId, chain)
+            eq(pools.chainId, normalizedChain)
           )
         ),
       });
@@ -90,7 +98,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
       
       const tokenInfo: TokenInfo = {
         address: address.toLowerCase(),
-        chainId: chain,
+        chainId: normalizedChain,
         symbol: isToken0 ? pool!.token0Symbol : (pool?.token1Symbol || 'UNKNOWN'),
         name: isToken0 ? pool!.token0Symbol : (pool?.token1Symbol || 'Unknown Token'),
         decimals: isToken0 ? pool!.token0Decimals : (pool?.token1Decimals || 18),
@@ -117,6 +125,12 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { from, to, chain } = parseResult.data;
+    const normalizedChain = chain.toLowerCase();
+    if (!isChainAllowed(normalizedChain, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
+
     const defaultLookbackDays = getDefaultHistoryLookbackDays(30, request.apiKey?.tier);
     const { from: fromDate, to: toDate } = resolveDateRange(from, to, defaultLookbackDays);
 
@@ -140,7 +154,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         .where(
           and(
             eq(tokenPrices.tokenAddress, address.toLowerCase()),
-            eq(tokenPrices.chainId, chain),
+            eq(tokenPrices.chainId, normalizedChain),
             gte(tokenPrices.timestamp, fromDate),
             lte(tokenPrices.timestamp, toDate)
           )
@@ -153,7 +167,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         const tokenExists = await db.query.tokenPrices.findFirst({
           where: and(
             eq(tokenPrices.tokenAddress, address.toLowerCase()),
-            eq(tokenPrices.chainId, chain)
+            eq(tokenPrices.chainId, normalizedChain)
           ),
         });
         
@@ -198,14 +212,23 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { q, chain } = parseResult.data;
+    const requestedChain = chain?.toLowerCase();
+    if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
+
+    const tierChainFilter = !requestedChain ? getAllowedChains(request.apiKey?.tier) : null;
     const searchTerm = q.toLowerCase();
     
     try {
       // Search in pools for token0 and token1
       const poolResults = await db.query.pools.findMany({
-        where: chain
-          ? eq(pools.chainId, chain)
-          : undefined,
+        where: requestedChain
+          ? eq(pools.chainId, requestedChain)
+          : tierChainFilter
+            ? inArray(pools.chainId, tierChainFilter)
+            : undefined,
         limit: 50,
       });
       

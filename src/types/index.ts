@@ -97,6 +97,7 @@ export interface PaginationInfo {
 
 export interface YieldFilters {
   chain?: string;
+  chains?: string[];
   protocol?: string;
   minTvl?: number;
   poolType?: PoolType;
