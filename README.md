@@ -74,6 +74,9 @@ Optional backfill controls:
 ### Chains
 - `GET /v1/chains/:chain_id/tvl` - Chain TVL history
 
+### Pools
+- `GET /v1/pools/:pool_id/il/history` - Historical impermanent loss from token prices
+
 ## Authentication
 
 All API requests require an `x-api-key` header:
