@@ -106,7 +106,7 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
       const { yields, hasMore, nextCursor } = await yieldService.getLatestYields({
         chain: params.chain,
         protocol: params.protocol,
-        minTvl: params.min_tvl || 100000, // Default $100K min TVL for top
+        minTvl: params.min_tvl ?? 100000, // Default $100K min TVL for top
         poolType: params.pool_type as PoolType | undefined,
         sortBy: 'apy',
         limit: 20,
