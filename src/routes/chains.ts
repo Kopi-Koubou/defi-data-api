@@ -75,12 +75,12 @@ export default async function chainRoutes(fastify: FastifyInstance) {
       
       const poolIds = chainPools.map((p) => p.id);
       
-      // Aggregate TVL by day
-      const results = await db
+      const dayExpr = sql`DATE_TRUNC('day', ${yields.timestamp})`;
+      const latestPoolSnapshots = db
         .select({
-          timestamp: sql<Date>`DATE_TRUNC('day', ${yields.timestamp})`.as('date'),
-          tvlUsd: sql<number>`SUM(${yields.tvlUsd})`.as('total_tvl'),
-          poolCount: sql<number>`COUNT(DISTINCT ${yields.poolId})`.as('pool_count'),
+          day: dayExpr.as('day'),
+          poolId: yields.poolId,
+          maxTimestamp: sql<Date>`MAX(${yields.timestamp})`.as('max_timestamp'),
         })
         .from(yields)
         .where(
@@ -90,8 +90,26 @@ export default async function chainRoutes(fastify: FastifyInstance) {
             lte(yields.timestamp, toDate)
           )
         )
-        .groupBy(sql`DATE_TRUNC('day', ${yields.timestamp})`)
-        .orderBy(asc(sql`DATE_TRUNC('day', ${yields.timestamp})`));
+        .groupBy(dayExpr, yields.poolId)
+        .as('latest_pool_snapshots');
+
+      // Aggregate daily TVL from each pool's latest snapshot in that interval.
+      const results = await db
+        .select({
+          timestamp: latestPoolSnapshots.day,
+          tvlUsd: sql<number>`SUM(${yields.tvlUsd})`.as('total_tvl'),
+          poolCount: sql<number>`COUNT(${latestPoolSnapshots.poolId})`.as('pool_count'),
+        })
+        .from(latestPoolSnapshots)
+        .innerJoin(
+          yields,
+          and(
+            eq(yields.poolId, latestPoolSnapshots.poolId),
+            eq(yields.timestamp, latestPoolSnapshots.maxTimestamp)
+          )
+        )
+        .groupBy(latestPoolSnapshots.day)
+        .orderBy(asc(latestPoolSnapshots.day));
       
       // Get protocol count on this chain
       const protocolCount = await db
@@ -101,22 +119,33 @@ export default async function chainRoutes(fastify: FastifyInstance) {
         .then((r) => r[0]?.count || 0);
       
       const history: ChainTvlPoint[] = results.map((r) => ({
-        timestamp: r.timestamp,
+        timestamp: r.timestamp as Date,
         tvlUsd: Math.round(r.tvlUsd),
         protocolCount,
         poolCount: r.poolCount,
       }));
       
-      // Get current stats
+      const latestPerPool = db
+        .select({
+          poolId: yields.poolId,
+          maxTimestamp: sql<Date>`MAX(${yields.timestamp})`.as('max_timestamp'),
+        })
+        .from(yields)
+        .where(sql`${yields.poolId} = ANY(${poolIds})`)
+        .groupBy(yields.poolId)
+        .as('latest_per_pool');
+
+      // Get current stats from latest snapshot per pool.
       const currentStats = await db
         .select({
           tvlUsd: sql<number>`SUM(${yields.tvlUsd})`.as('current_tvl'),
         })
-        .from(yields)
-        .where(
+        .from(latestPerPool)
+        .innerJoin(
+          yields,
           and(
-            sql`${yields.poolId} = ANY(${poolIds})`,
-            sql`${yields.timestamp} = (SELECT MAX(timestamp) FROM ${yields} WHERE ${sql`${yields.poolId} = ANY(${poolIds})`})`
+            eq(yields.poolId, latestPerPool.poolId),
+            eq(yields.timestamp, latestPerPool.maxTimestamp)
           )
         )
         .then((r) => r[0]);

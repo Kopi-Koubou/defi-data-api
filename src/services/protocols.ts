@@ -238,11 +238,12 @@ export async function getProtocolTvlHistory(
     return [];
   }
 
-  // Aggregate TVL by date
-  const results = await db
+  const dayExpr = sql`DATE_TRUNC('day', ${yields.timestamp})`;
+  const latestPoolSnapshots = db
     .select({
-      timestamp: sql<Date>`DATE_TRUNC('day', ${yields.timestamp})`.as('date'),
-      tvlUsd: sql<number>`SUM(${yields.tvlUsd})`.as('total_tvl'),
+      day: dayExpr.as('day'),
+      poolId: yields.poolId,
+      maxTimestamp: sql<Date>`MAX(${yields.timestamp})`.as('max_timestamp'),
     })
     .from(yields)
     .where(
@@ -252,11 +253,28 @@ export async function getProtocolTvlHistory(
         lte(yields.timestamp, to)
       )
     )
-    .groupBy(sql`DATE_TRUNC('day', ${yields.timestamp})`)
-    .orderBy(asc(sql`DATE_TRUNC('day', ${yields.timestamp})`));
+    .groupBy(dayExpr, yields.poolId)
+    .as('latest_pool_snapshots');
+
+  // Aggregate daily TVL from each pool's latest snapshot in that interval.
+  const results = await db
+    .select({
+      timestamp: latestPoolSnapshots.day,
+      tvlUsd: sql<number>`SUM(${yields.tvlUsd})`.as('total_tvl'),
+    })
+    .from(latestPoolSnapshots)
+    .innerJoin(
+      yields,
+      and(
+        eq(yields.poolId, latestPoolSnapshots.poolId),
+        eq(yields.timestamp, latestPoolSnapshots.maxTimestamp)
+      )
+    )
+    .groupBy(latestPoolSnapshots.day)
+    .orderBy(asc(latestPoolSnapshots.day));
   
   return results.map((r) => ({
-    timestamp: r.timestamp,
+    timestamp: r.timestamp as Date,
     tvlUsd: Math.round(r.tvlUsd),
   }));
 }
