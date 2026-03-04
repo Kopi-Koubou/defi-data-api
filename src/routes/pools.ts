@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import * as poolService from '../services/pools.js';
+import * as riskService from '../services/risk.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import { createResponseMeta, Errors, sendSuccess } from '../utils/response.js';
 
@@ -12,6 +13,27 @@ const ilHistoryQuerySchema = z.object({
 });
 
 export default async function poolRoutes(fastify: FastifyInstance) {
+  // GET /v1/pools/:pool_id/risk-score
+  fastify.get('/:pool_id/risk-score', async (request: FastifyRequest, reply: FastifyReply) => {
+    const meta = createResponseMeta();
+    const { pool_id } = request.params as { pool_id: string };
+
+    try {
+      const riskScore = await riskService.getPoolRiskScore(pool_id);
+
+      if (!riskScore) {
+        Errors.NOT_FOUND(reply, meta, 'Pool');
+        return;
+      }
+
+      sendSuccess(reply, riskScore, meta);
+    } catch (error) {
+      request.log.error(error);
+      Errors.INTERNAL_ERROR(reply, meta);
+    }
+  });
+
+  // GET /v1/pools/:pool_id/il/history
   fastify.get('/:pool_id/il/history', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { pool_id } = request.params as { pool_id: string };

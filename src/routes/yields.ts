@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { decodeYieldCursor, encodeYieldCursor } from '../utils/yield-cursor.js';
 import * as yieldService from '../services/yields.js';
+import * as riskService from '../services/risk.js';
 import type { PoolType } from '../types/index.js';
 
 const querySchema = z.object({
@@ -27,6 +28,16 @@ const historyQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   interval: z.enum(['1h', '1d', '1w']).optional().default('1d'),
+});
+
+const riskAdjustedQuerySchema = z.object({
+  chain: z.string().optional(),
+  protocol: z.string().optional(),
+  min_tvl: z.coerce.number().min(0).optional(),
+  pool_type: z.enum(['lending', 'lp', 'staking', 'vault', 'restaking']).optional(),
+  min_score: z.coerce.number().min(0).max(100).optional().default(0),
+  sort_by: z.enum(['sharpe', 'apy', 'score']).optional().default('sharpe'),
+  limit: z.coerce.number().min(1).max(100).optional().default(50),
 });
 
 export default async function yieldRoutes(fastify: FastifyInstance) {
@@ -108,6 +119,36 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         cursor: encodedCursor,
         hasMore,
       });
+    } catch (error) {
+      request.log.error(error);
+      Errors.INTERNAL_ERROR(reply, meta);
+    }
+  });
+
+  // GET /v1/yields/risk-adjusted - Rank yields by risk-adjusted metrics
+  fastify.get('/risk-adjusted', async (request: FastifyRequest, reply: FastifyReply) => {
+    const meta = createResponseMeta();
+
+    const parseResult = riskAdjustedQuerySchema.safeParse(request.query);
+    if (!parseResult.success) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid query parameters');
+      return;
+    }
+
+    const params = parseResult.data;
+
+    try {
+      const yields = await riskService.getRiskAdjustedYields({
+        chain: params.chain,
+        protocol: params.protocol,
+        minTvl: params.min_tvl,
+        poolType: params.pool_type as PoolType | undefined,
+        minScore: params.min_score,
+        sortBy: params.sort_by,
+        limit: params.limit,
+      });
+
+      sendSuccess(reply, yields, meta);
     } catch (error) {
       request.log.error(error);
       Errors.INTERNAL_ERROR(reply, meta);
