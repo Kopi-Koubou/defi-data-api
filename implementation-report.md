@@ -1,41 +1,33 @@
 # Implementation Report
 
 ## Summary
-- Read `PRD.md` (repo has `PRD.md`; `design-spec.md` and `tech-spec.md` are still missing).
-- Implemented asset filtering and asset-pair filtering for yield discovery/ranking endpoints:
-  - `GET /v1/yields`
-  - `GET /v1/yields/top`
-  - `GET /v1/yields/risk-adjusted`
-- Added service-level filtering logic for symbol/address token matching and pair matching (order-insensitive).
-- Added route tests to verify new filter parameters are forwarded correctly.
-- Improved token endpoint behavior:
-  - `GET /v1/tokens/:address` now returns `deployments` (chain list) and `logoUri` (currently `null`).
-  - Hardened chain-scoped token history fallback checks.
-  - Fixed token search edge handling to avoid empty token addresses and normalize price joins.
+- Read `PRD.md` and implemented the current scope using repository code + tests as source of truth because `design-spec.md` and `tech-spec.md` are not present in this project directory.
+- Updated webhook ownership behavior to user scope for management endpoints:
+  - `GET /v1/webhooks` now lists by `userId` instead of only current `apiKeyId`.
+  - `DELETE /v1/webhooks/:webhook_id` now authorizes by `userId` instead of only current `apiKeyId`.
+- Aligned default history lookback behavior on remaining history endpoints with 90-day builder-tier baseline:
+  - `GET /v1/chains/:chain_id/tvl`
+  - `GET /v1/tokens/:address/price/history`
+- Added route tests for webhook behavior, including user-scoped listing/deletion and free-tier rejection.
 
 ## Changed Files
-- `src/routes/yields.ts`
-- `src/services/yields.ts`
-- `src/services/risk.ts`
-- `src/types/index.ts`
-- `src/routes/yields.test.ts`
+- `src/routes/webhooks.ts`
+- `src/routes/webhooks.test.ts`
+- `src/routes/chains.ts`
 - `src/routes/tokens.ts`
 - `implementation-report.md`
 
 ## Tests Run
-- After commit `feat(yields): add asset and pair filtering across yield rankings`:
-  - `npm test` -> pass (`12` files, `54` tests)
-  - `npm run build` -> pass
-- After commit `feat(tokens): enrich metadata and harden chain-scoped lookups`:
-  - `npm test` -> pass (`12` files, `54` tests)
-  - `npm run build` -> pass
+- `./node_modules/.bin/tsc --noEmit` -> pass
+- `./node_modules/.bin/tsc` -> pass
+- `./node_modules/.bin/vitest run` -> pass (`13` files, `58` tests)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` are missing, so implementation scope was inferred from `PRD.md` plus current code conventions.
-- Token metadata (`name`, `symbol`, `decimals`) is inferred from pool records when available; `logoUri` is not yet backed by a canonical metadata source.
-- Token route changes are not covered by dedicated route tests yet (current test suite remains green, but token endpoints are DB-coupled and would benefit from explicit integration coverage).
+- `design-spec.md` and `tech-spec.md` are missing at `/Users/devl/clawd/projects/defi-data-api`, so scope validation depended on `PRD.md` plus existing code/test patterns.
+- Webhooks are now managed at user scope for list/delete; if key-scoped management was intended for product policy reasons, this behavior should be explicitly documented.
+- Longer default windows (90 days) on chain/token history endpoints can increase query cost for users who omit `from`/`to`.
 
 ## Next Steps
-1. Add DB-backed integration tests for `GET /v1/tokens/:address`, `GET /v1/tokens/:address/price/history`, and `GET /v1/tokens/search`.
-2. Introduce a canonical token metadata source/table for reliable names and logo URIs across chains.
-3. Restore/add `design-spec.md` and `tech-spec.md` to make implementation scope explicit for future stages.
+1. Add integration tests for token and chain endpoints to validate date-window behavior against real DB fixtures.
+2. Clarify webhook management policy in specs/docs (user-scoped vs key-scoped lifecycle).
+3. Restore/add `design-spec.md` and `tech-spec.md` to make implementation scope explicit for future iterations.
