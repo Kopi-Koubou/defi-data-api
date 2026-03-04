@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import yieldRoutes from './yields.js';
+import * as riskService from '../services/risk.js';
 import * as yieldService from '../services/yields.js';
 
 vi.mock('../services/yields.js', () => ({
@@ -86,5 +87,66 @@ describe('yield routes', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('FORBIDDEN');
     expect(yieldService.getYieldHistory).not.toHaveBeenCalled();
+  });
+
+  it('passes asset and asset-pair filters to yield listing service', async () => {
+    vi.mocked(yieldService.getLatestYields).mockResolvedValue({
+      yields: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields?asset=ETH&asset_pair=ETH-USDC',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(yieldService.getLatestYields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset: 'ETH',
+        assetPair: 'ETH-USDC',
+      })
+    );
+  });
+
+  it('passes asset and asset-pair filters to top yield service', async () => {
+    vi.mocked(yieldService.getLatestYields).mockResolvedValue({
+      yields: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/top?asset=0xA0b86991c6218b36c1d19D4A2e9Eb0cE3606eB48&asset_pair=ETH-USDC',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(yieldService.getLatestYields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset: '0xA0b86991c6218b36c1d19D4A2e9Eb0cE3606eB48',
+        assetPair: 'ETH-USDC',
+        sortBy: 'apy',
+        limit: 20,
+      })
+    );
+  });
+
+  it('passes asset and asset-pair filters to risk-adjusted service', async () => {
+    vi.mocked(riskService.getRiskAdjustedYields).mockResolvedValue([]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/risk-adjusted?asset=ETH&asset_pair=USDC-ETH',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(riskService.getRiskAdjustedYields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset: 'ETH',
+        assetPair: 'USDC-ETH',
+      })
+    );
   });
 });

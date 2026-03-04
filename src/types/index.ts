@@ -99,6 +99,8 @@ export interface YieldFilters {
   chain?: string;
   chains?: string[];
   protocol?: string;
+  asset?: string;
+  assetPair?: string;
   minTvl?: number;
   poolType?: PoolType;
   sortBy?: 'apy' | 'tvl';

@@ -30,6 +30,37 @@ export interface YieldHistoryPoint {
   tvlUsd: number;
 }
 
+function buildToken0MatchCondition(token: string): SQL<unknown> {
+  const normalized = token.trim().toLowerCase();
+  if (!normalized) {
+    return sql`FALSE`;
+  }
+
+  return sql`LOWER(${pools.token0Symbol}) = ${normalized} OR LOWER(${pools.token0Address}) = ${normalized}`;
+}
+
+function buildToken1MatchCondition(token: string): SQL<unknown> {
+  const normalized = token.trim().toLowerCase();
+  if (!normalized) {
+    return sql`FALSE`;
+  }
+
+  return sql`LOWER(${pools.token1Symbol}) = ${normalized} OR LOWER(${pools.token1Address}) = ${normalized}`;
+}
+
+function parseAssetPair(assetPair: string): [string, string] | null {
+  const parts = assetPair
+    .split(/[\/\-_:]/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  return [parts[0], parts[1]];
+}
+
 export async function getLatestYields(
   filters: YieldFilters
 ): Promise<{
@@ -56,6 +87,30 @@ export async function getLatestYields(
   
   if (filters.poolType) {
     conditions.push(eq(pools.poolType, filters.poolType));
+  }
+
+  if (filters.asset) {
+    conditions.push(
+      or(
+        buildToken0MatchCondition(filters.asset),
+        buildToken1MatchCondition(filters.asset)
+      ) as SQL<unknown>
+    );
+  }
+
+  if (filters.assetPair) {
+    const assetPair = parseAssetPair(filters.assetPair);
+    if (assetPair) {
+      const [assetA, assetB] = assetPair;
+      conditions.push(
+        or(
+          and(buildToken0MatchCondition(assetA), buildToken1MatchCondition(assetB)),
+          and(buildToken0MatchCondition(assetB), buildToken1MatchCondition(assetA))
+        ) as SQL<unknown>
+      );
+    } else {
+      conditions.push(sql`FALSE`);
+    }
   }
 
   conditions.push(gte(yields.tvlUsd, filters.minTvl || 0));

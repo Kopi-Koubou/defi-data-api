@@ -26,6 +26,8 @@ import type { PoolType } from '../types/index.js';
 const querySchema = z.object({
   chain: z.string().optional(),
   protocol: z.string().optional(),
+  asset: z.string().min(1).max(64).optional(),
+  asset_pair: z.string().min(3).max(128).regex(/^[^/\-_:]+[/\-_:][^/\-_:]+$/).optional(),
   min_tvl: z.coerce.number().min(0).optional(),
   pool_type: z.enum(['lending', 'lp', 'staking', 'vault', 'restaking']).optional(),
   sort_by: z.enum(['apy', 'tvl']).optional().default('tvl'),
@@ -42,6 +44,8 @@ const historyQuerySchema = z.object({
 const riskAdjustedQuerySchema = z.object({
   chain: z.string().optional(),
   protocol: z.string().optional(),
+  asset: z.string().min(1).max(64).optional(),
+  asset_pair: z.string().min(3).max(128).regex(/^[^/\-_:]+[/\-_:][^/\-_:]+$/).optional(),
   min_tvl: z.coerce.number().min(0).optional(),
   pool_type: z.enum(['lending', 'lp', 'staking', 'vault', 'restaking']).optional(),
   min_score: z.coerce.number().min(0).max(100).optional().default(0),
@@ -79,6 +83,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         chain: requestedChain,
         chains: tierChainFilter || undefined,
         protocol: params.protocol,
+        asset: params.asset,
+        assetPair: params.asset_pair,
         minTvl: params.min_tvl,
         poolType: params.pool_type as PoolType | undefined,
         sortBy: params.sort_by,
@@ -131,6 +137,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         chain: requestedChain,
         chains: tierChainFilter || undefined,
         protocol: params.protocol,
+        asset: params.asset,
+        assetPair: params.asset_pair,
         minTvl: params.min_tvl ?? 100000, // Default $100K min TVL for top
         poolType: params.pool_type as PoolType | undefined,
         sortBy: 'apy',
@@ -171,6 +179,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
       const yields = await riskService.getRiskAdjustedYields({
         chain: params.chain,
         protocol: params.protocol,
+        asset: params.asset,
+        assetPair: params.asset_pair,
         minTvl: params.min_tvl,
         poolType: params.pool_type as PoolType | undefined,
         minScore: params.min_score,
