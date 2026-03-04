@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildChainLimitMessage,
   buildHistoryLimitMessage,
+  getAllowedChains,
   getDefaultHistoryLookbackDays,
   getHistoryLookbackDays,
   getWebhookLimit,
   hasAdvancedIlAccess,
   hasRiskAccess,
+  isChainAllowed,
   isDateWithinHistoryWindow,
   resolveApiTier,
 } from './tier.js';
@@ -62,5 +65,21 @@ describe('tier utils', () => {
     expect(hasRiskAccess('builder')).toBe(true);
     expect(hasAdvancedIlAccess('free')).toBe(false);
     expect(hasAdvancedIlAccess('pro')).toBe(true);
+  });
+
+  it('returns chain access limits by tier', () => {
+    expect(getAllowedChains('free')).toEqual(['ethereum', 'arbitrum', 'base']);
+    expect(getAllowedChains('builder')).toBeNull();
+  });
+
+  it('checks chain access rules', () => {
+    expect(isChainAllowed('ethereum', 'free')).toBe(true);
+    expect(isChainAllowed('solana', 'free')).toBe(false);
+    expect(isChainAllowed('solana', 'builder')).toBe(true);
+  });
+
+  it('builds user-facing chain limit messages', () => {
+    expect(buildChainLimitMessage('free')).toContain('ethereum');
+    expect(buildChainLimitMessage('free')).toContain('arbitrum');
   });
 });

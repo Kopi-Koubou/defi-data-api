@@ -14,6 +14,13 @@ const WEBHOOK_LIMITS: Record<ApiTier, number | null> = {
   enterprise: null,
 };
 
+const CHAIN_ACCESS: Record<ApiTier, string[] | null> = {
+  free: ['ethereum', 'arbitrum', 'base'],
+  builder: null,
+  pro: null,
+  enterprise: null,
+};
+
 export function resolveApiTier(tier: string | undefined): ApiTier {
   switch (tier) {
     case 'builder':
@@ -73,4 +80,29 @@ export function hasRiskAccess(tier: string | undefined): boolean {
 
 export function hasAdvancedIlAccess(tier: string | undefined): boolean {
   return resolveApiTier(tier) !== 'free';
+}
+
+export function getAllowedChains(tier: string | undefined): string[] | null {
+  const chains = CHAIN_ACCESS[resolveApiTier(tier)];
+  return chains ? [...chains] : null;
+}
+
+export function isChainAllowed(chain: string, tier: string | undefined): boolean {
+  const normalizedChain = chain.toLowerCase();
+  const allowedChains = getAllowedChains(tier);
+  if (!allowedChains) {
+    return true;
+  }
+
+  return allowedChains.includes(normalizedChain);
+}
+
+export function buildChainLimitMessage(tier: string | undefined): string {
+  const resolvedTier = resolveApiTier(tier);
+  const allowedChains = getAllowedChains(resolvedTier);
+  if (!allowedChains) {
+    return 'Chain access is available';
+  }
+
+  return `${resolvedTier} tier supports these chains: ${allowedChains.join(', ')}`;
 }
