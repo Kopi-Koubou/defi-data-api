@@ -1,54 +1,42 @@
 # Implementation Report
 
 ## Summary
-- Read `PRD.md` before coding and confirmed `design-spec.md` and `tech-spec.md` are not present in the repository.
-- Implemented tier-entitlement policies from the current product scope:
-  - Added shared tier policy utilities for `free`, `builder`, `pro`, and `enterprise`.
-  - Enforced free-tier IL restrictions:
-    - Free can use basic single-pair IL only.
-    - Batch IL simulation and fee-adjusted IL are paid-tier only.
-  - Enforced historical data lookback limits across historical endpoints:
-    - Free: 7 days
-    - Builder: 90 days
-    - Pro/Enterprise: unlimited (endpoint defaults still applied where relevant).
-  - Enforced risk endpoint access for paid tiers only.
-  - Enforced webhook active-subscription caps:
-    - Builder: 5
-    - Pro: 50
-    - Enterprise: unlimited
-- Added tests for tier utility behavior and expanded tools route tests for tier-gated IL behavior.
-- Executed work in small commits with test/build validation after each implementation step.
+- Read `PRD.md` and verified `design-spec.md` / `tech-spec.md` are not present in this repository path.
+- Implemented the remaining free-tier chain constraint from pricing scope (`ETH + 2 chains`) using shared entitlement utilities and route/service enforcement.
+- Added chain entitlement helpers:
+  - Free tier allowlist: `ethereum`, `arbitrum`, `base`
+  - Paid tiers: unrestricted
+- Enforced chain limits in API behavior:
+  - `GET /v1/yields` and `GET /v1/yields/top` now reject disallowed explicit chain requests for free tier.
+  - Free-tier yield requests without a `chain` filter are now automatically scoped to the allowlist.
+  - `GET /v1/chains/:chain_id/tvl` rejects disallowed free-tier chains.
+  - Token endpoints (`/v1/tokens/:address`, `/v1/tokens/:address/price/history`, `/v1/tokens/search`) enforce chain allowlist for free tier.
+- Executed work in small commits, validating test/build after each implementation step.
 
 ## Changed Files
 - `src/utils/tier.ts`
 - `src/utils/tier.test.ts`
-- `src/routes/tools.ts`
-- `src/routes/tools.test.ts`
+- `src/types/index.ts`
+- `src/services/yields.ts`
 - `src/routes/yields.ts`
-- `src/routes/protocols.ts`
 - `src/routes/chains.ts`
 - `src/routes/tokens.ts`
-- `src/routes/pools.ts`
-- `src/routes/webhooks.ts`
 - `implementation-report.md`
 
 ## Tests Run
-- After commit `feat(tiers): add shared entitlement policy utilities`:
-  - `npm test` -> pass (`9` files, `38` tests)
+- After commit `feat(tiers): add free-tier chain entitlement rules`:
+  - `npm test` -> pass (`9` files, `43` tests)
   - `npm run build` -> pass
-- After commit `feat(tools): enforce free-tier IL access limits`:
-  - `npm test` -> pass (`9` files, `40` tests)
-  - `npm run build` -> pass
-- After commit `feat(api): enforce tier limits on history, risk, and webhooks`:
-  - `npm test` -> pass (`9` files, `40` tests)
+- After commit `feat(api): enforce free-tier chain access limits`:
+  - `npm test` -> pass (`9` files, `43` tests)
   - `npm run build` -> pass
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` are still missing, so this implementation used `PRD.md` plus current repository behavior as the source of truth.
-- The new history/risk/webhook entitlement paths are covered by compile/test passes but do not yet have dedicated DB-backed integration tests for all endpoints.
-- Webhook cap enforcement is implemented per `userId` active subscriptions; if the intended cap should be scoped differently (for example per API key), this should be clarified.
+- `design-spec.md` and `tech-spec.md` remain missing in `/Users/devl/clawd/projects/defi-data-api`, so implementation decisions were based on `PRD.md` and existing code conventions.
+- Chain limits are now enforced where chain is explicit (or defaulted through yield filtering), but some aggregate endpoints without chain input (for example protocol-level aggregates) can still include data from all chains.
+- There are no DB-backed integration tests yet for token/yield/chain route entitlement behavior; coverage is currently unit-level plus compile/runtime validation.
 
 ## Next Steps
-1. Add integration tests (with seeded DB fixtures) for historical endpoints, risk endpoints, and webhook cap enforcement.
-2. Enforce the free-tier chain access constraint (`ETH + 2 chains`) if that remains in-scope for the current release.
-3. Restore `design-spec.md` and `tech-spec.md` so future implementation scope decisions are unambiguous.
+1. Add integration tests around tiered chain access for `/v1/yields`, `/v1/chains/:chain_id/tvl`, and token endpoints using seeded fixtures.
+2. Decide whether protocol aggregate endpoints should also be chain-scoped for free tier and implement if required.
+3. Restore `design-spec.md` and `tech-spec.md` in this repo so future scope decisions are unambiguous.
