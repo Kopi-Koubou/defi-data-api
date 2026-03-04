@@ -6,9 +6,11 @@ import * as riskService from '../services/risk.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import { createResponseMeta, Errors, sendSuccess } from '../utils/response.js';
 import {
+  buildChainLimitMessage,
   buildHistoryLimitMessage,
   getDefaultHistoryLookbackDays,
   hasRiskAccess,
+  isChainAllowed,
   isDateWithinHistoryWindow,
 } from '../utils/tier.js';
 
@@ -34,6 +36,11 @@ export default async function poolRoutes(fastify: FastifyInstance) {
 
       if (!riskScore) {
         Errors.NOT_FOUND(reply, meta, 'Pool');
+        return;
+      }
+
+      if (!isChainAllowed(riskScore.chain, request.apiKey?.tier)) {
+        Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
         return;
       }
 
@@ -78,6 +85,11 @@ export default async function poolRoutes(fastify: FastifyInstance) {
 
       if (!history) {
         Errors.NOT_FOUND(reply, meta, 'Pool');
+        return;
+      }
+
+      if (!isChainAllowed(history.chain, request.apiKey?.tier)) {
+        Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
         return;
       }
 

@@ -197,6 +197,11 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         Errors.NOT_FOUND(reply, meta, 'Pool');
         return;
       }
+
+      if (!isChainAllowed(yieldData.chain, request.apiKey?.tier)) {
+        Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+        return;
+      }
       
       sendSuccess(reply, yieldData, meta);
     } catch (error) {
@@ -235,16 +240,18 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     try {
-      const history = await yieldService.getYieldHistory(pool_id, from, to, params.interval);
-      
-      if (history.length === 0) {
-        // Check if pool exists
-        const poolExists = await yieldService.getYieldByPoolId(pool_id);
-        if (!poolExists) {
-          Errors.NOT_FOUND(reply, meta, 'Pool');
-          return;
-        }
+      const poolYield = await yieldService.getYieldByPoolId(pool_id);
+      if (!poolYield) {
+        Errors.NOT_FOUND(reply, meta, 'Pool');
+        return;
       }
+
+      if (!isChainAllowed(poolYield.chain, request.apiKey?.tier)) {
+        Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+        return;
+      }
+
+      const history = await yieldService.getYieldHistory(pool_id, from, to, params.interval);
       
       sendSuccess(reply, history, meta);
     } catch (error) {
