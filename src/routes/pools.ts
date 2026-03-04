@@ -5,6 +5,12 @@ import * as poolService from '../services/pools.js';
 import * as riskService from '../services/risk.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import { createResponseMeta, Errors, sendSuccess } from '../utils/response.js';
+import {
+  buildHistoryLimitMessage,
+  getDefaultHistoryLookbackDays,
+  hasRiskAccess,
+  isDateWithinHistoryWindow,
+} from '../utils/tier.js';
 
 const ilHistoryQuerySchema = z.object({
   from: z.string().datetime().optional(),
@@ -17,6 +23,11 @@ export default async function poolRoutes(fastify: FastifyInstance) {
   fastify.get('/:pool_id/risk-score', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { pool_id } = request.params as { pool_id: string };
+
+    if (!hasRiskAccess(request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, 'Risk scores are available on paid tiers');
+      return;
+    }
 
     try {
       const riskScore = await riskService.getPoolRiskScore(pool_id);
@@ -45,10 +56,16 @@ export default async function poolRoutes(fastify: FastifyInstance) {
     }
 
     const { from, to, interval } = parseResult.data;
-    const { from: fromDate, to: toDate } = resolveDateRange(from, to, 90);
+    const defaultLookbackDays = getDefaultHistoryLookbackDays(90, request.apiKey?.tier);
+    const { from: fromDate, to: toDate } = resolveDateRange(from, to, defaultLookbackDays);
 
     if (!isDateRangeValid({ from: fromDate, to: toDate })) {
       Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
+
+    if (!isDateWithinHistoryWindow(fromDate, request.apiKey?.tier, toDate)) {
+      Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }
 

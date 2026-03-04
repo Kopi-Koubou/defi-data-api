@@ -11,6 +11,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
+import {
+  buildHistoryLimitMessage,
+  getDefaultHistoryLookbackDays,
+  isDateWithinHistoryWindow,
+} from '../utils/tier.js';
 import * as protocolService from '../services/protocols.js';
 
 const historyQuerySchema = z.object({
@@ -83,10 +88,16 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
-    const { from, to } = resolveDateRange(params.from, params.to, 90);
+    const defaultLookbackDays = getDefaultHistoryLookbackDays(90, request.apiKey?.tier);
+    const { from, to } = resolveDateRange(params.from, params.to, defaultLookbackDays);
 
     if (!isDateRangeValid({ from, to })) {
       Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
+
+    if (!isDateWithinHistoryWindow(from, request.apiKey?.tier, to)) {
+      Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }
     

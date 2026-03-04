@@ -9,6 +9,11 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
+import {
+  buildHistoryLimitMessage,
+  getDefaultHistoryLookbackDays,
+  isDateWithinHistoryWindow,
+} from '../utils/tier.js';
 import { db, pools, tokenPrices } from '../db/index.js';
 import { eq, and, gte, lte, desc, asc, sql, or } from 'drizzle-orm';
 
@@ -112,10 +117,16 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { from, to, chain } = parseResult.data;
-    const { from: fromDate, to: toDate } = resolveDateRange(from, to, 30);
+    const defaultLookbackDays = getDefaultHistoryLookbackDays(30, request.apiKey?.tier);
+    const { from: fromDate, to: toDate } = resolveDateRange(from, to, defaultLookbackDays);
 
     if (!isDateRangeValid({ from: fromDate, to: toDate })) {
       Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
+
+    if (!isDateWithinHistoryWindow(fromDate, request.apiKey?.tier, toDate)) {
+      Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }
     

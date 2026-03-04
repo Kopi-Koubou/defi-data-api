@@ -9,6 +9,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
+import {
+  buildHistoryLimitMessage,
+  getDefaultHistoryLookbackDays,
+  hasRiskAccess,
+  isDateWithinHistoryWindow,
+} from '../utils/tier.js';
 import { decodeYieldCursor, encodeYieldCursor } from '../utils/yield-cursor.js';
 import * as yieldService from '../services/yields.js';
 import * as riskService from '../services/risk.js';
@@ -129,6 +135,11 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
   fastify.get('/risk-adjusted', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
 
+    if (!hasRiskAccess(request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, 'Risk-adjusted yields are available on paid tiers');
+      return;
+    }
+
     const parseResult = riskAdjustedQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
       Errors.BAD_REQUEST(reply, meta, 'Invalid query parameters');
@@ -188,14 +199,19 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     
     const params = parseResult.data;
     
-    // Default to last 90 days for MVP historical depth
+    const defaultLookbackDays = getDefaultHistoryLookbackDays(90, request.apiKey?.tier);
     const to = params.to ? new Date(params.to) : new Date();
     const from = params.from
       ? new Date(params.from)
-      : new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+      : new Date(to.getTime() - defaultLookbackDays * 24 * 60 * 60 * 1000);
 
     if (from > to) {
       Errors.BAD_REQUEST(reply, meta, '`from` must be before `to`');
+      return;
+    }
+
+    if (!isDateWithinHistoryWindow(from, request.apiKey?.tier, to)) {
+      Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }
     

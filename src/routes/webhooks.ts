@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { db, webhookSubscriptions } from '../db/index.js';
 import { createResponseMeta, Errors, sendSuccess } from '../utils/response.js';
+import { getWebhookLimit } from '../utils/tier.js';
 
 const WEBHOOK_TIERS = new Set(['builder', 'pro', 'enterprise']);
 
@@ -61,8 +62,29 @@ export default async function webhookRoutes(fastify: FastifyInstance) {
     const { event_type, config, url } = parseResult.data;
     const now = new Date();
     const webhookId = `wh_${randomUUID().replace(/-/g, '').slice(0, 32)}`;
+    const webhookLimit = getWebhookLimit(request.apiKey?.tier);
 
     try {
+      if (webhookLimit !== null) {
+        const activeWebhooks = await db.query.webhookSubscriptions.findMany({
+          where: and(
+            eq(webhookSubscriptions.userId, request.apiKey!.userId),
+            eq(webhookSubscriptions.active, true)
+          ),
+          columns: { id: true },
+          limit: webhookLimit,
+        });
+
+        if (activeWebhooks.length >= webhookLimit) {
+          Errors.FORBIDDEN(
+            reply,
+            meta,
+            `${request.apiKey!.tier} tier supports up to ${webhookLimit} active webhooks`
+          );
+          return;
+        }
+      }
+
       await db.insert(webhookSubscriptions).values({
         id: webhookId,
         userId: request.apiKey!.userId,
