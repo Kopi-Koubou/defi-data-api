@@ -53,12 +53,14 @@ Optional backfill controls:
 ### Yields
 - `GET /v1/yields` - List all yields with filters
 - `GET /v1/yields/top` - Top yields by APY
+- `GET /v1/yields/risk-adjusted` - Risk-adjusted yield rankings
 - `GET /v1/yields/:pool_id` - Get specific pool yield
 - `GET /v1/yields/:pool_id/history` - Historical yield data
 
 ### Protocols
 - `GET /v1/protocols` - List all protocols
 - `GET /v1/protocols/:protocol_id` - Protocol details
+- `GET /v1/protocols/:protocol_id/audit-status` - Protocol audit status snapshot
 - `GET /v1/protocols/:protocol_id/tvl/history` - TVL history
 - `GET /v1/protocols/:protocol_id/pools` - Protocol pools
 
@@ -75,7 +77,13 @@ Optional backfill controls:
 - `GET /v1/chains/:chain_id/tvl` - Chain TVL history
 
 ### Pools
+- `GET /v1/pools/:pool_id/risk-score` - Pool risk score and factor breakdown
 - `GET /v1/pools/:pool_id/il/history` - Historical impermanent loss from token prices
+
+### Webhooks (Builder tier and above)
+- `POST /v1/webhooks` - Create webhook subscription
+- `GET /v1/webhooks` - List webhook subscriptions
+- `DELETE /v1/webhooks/:webhook_id` - Deactivate webhook subscription
 
 ## Authentication
 
