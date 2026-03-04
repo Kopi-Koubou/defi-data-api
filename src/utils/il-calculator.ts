@@ -7,10 +7,38 @@
 
 import type { ImpermanentLossInput, ImpermanentLossResult } from '../types/index.js';
 
+export class InvalidImpermanentLossInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidImpermanentLossInputError';
+  }
+}
+
+function assertFinitePositive(name: string, value: number): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new InvalidImpermanentLossInputError(`${name} must be a finite number greater than 0`);
+  }
+}
+
+function assertFiniteNonNegative(name: string, value: number): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new InvalidImpermanentLossInputError(`${name} must be a finite number greater than or equal to 0`);
+  }
+}
+
+function assertFiniteIntegerPositive(name: string, value: number): void {
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new InvalidImpermanentLossInputError(`${name} must be a positive integer`);
+  }
+}
+
 export function calculateImpermanentLoss(
   input: ImpermanentLossInput
 ): ImpermanentLossResult {
   const { token0, token1, entryPriceRatio, currentPriceRatio } = input;
+
+  assertFinitePositive('entryPriceRatio', entryPriceRatio);
+  assertFinitePositive('currentPriceRatio', currentPriceRatio);
   
   // Price ratio change factor
   const r = currentPriceRatio / entryPriceRatio;
@@ -40,6 +68,9 @@ export function calculateILWithFees(
   feeApr: number,
   days: number
 ): ImpermanentLossResult & { feeIncomePercentage: number; netReturnPercentage: number } {
+  assertFiniteNonNegative('feeApr', feeApr);
+  assertFiniteIntegerPositive('days', days);
+
   const ilResult = calculateImpermanentLoss(input);
   
   // Calculate fee income over the period
@@ -60,7 +91,15 @@ export function simulateILScenarios(
   baseInput: Omit<ImpermanentLossInput, 'currentPriceRatio'>,
   priceChanges: number[] // percentage changes, e.g., [-0.5, -0.25, 0, 0.25, 0.5]
 ): Array<ImpermanentLossResult & { priceChangePercent: number }> {
+  assertFinitePositive('entryPriceRatio', baseInput.entryPriceRatio);
+
   return priceChanges.map((change) => {
+    if (!Number.isFinite(change) || change <= -1) {
+      throw new InvalidImpermanentLossInputError(
+        'Each price change must be a finite number greater than -1'
+      );
+    }
+
     const currentPriceRatio = baseInput.entryPriceRatio * (1 + change);
     const result = calculateImpermanentLoss({
       ...baseInput,
@@ -85,7 +124,16 @@ export function simulateILScenariosWithFees(
     priceChangePercent: number;
   }
 > {
+  assertFiniteNonNegative('feeApr', feeApr);
+  assertFiniteIntegerPositive('days', days);
+
   return priceChanges.map((change) => {
+    if (!Number.isFinite(change) || change <= -1) {
+      throw new InvalidImpermanentLossInputError(
+        'Each price change must be a finite number greater than -1'
+      );
+    }
+
     const currentPriceRatio = baseInput.entryPriceRatio * (1 + change);
     const result = calculateILWithFees(
       {

@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import {
+  InvalidImpermanentLossInputError,
   calculateILWithFees,
   calculateImpermanentLoss,
   simulateILScenarios,
@@ -17,18 +18,18 @@ import {
 const ilQuerySchema = z.object({
   token0: z.string().min(1).max(10),
   token1: z.string().min(1).max(10),
-  entry_price_ratio: z.coerce.number().positive(),
-  current_price_ratio: z.coerce.number().positive(),
-  fee_apr: z.coerce.number().min(0).max(1000).optional(),
+  entry_price_ratio: z.coerce.number().finite().positive(),
+  current_price_ratio: z.coerce.number().finite().positive(),
+  fee_apr: z.coerce.number().finite().min(0).max(1000).optional(),
   days: z.coerce.number().int().min(1).max(3650).optional(),
 });
 
 const ilSimulateSchema = z.object({
   token0: z.string().min(1).max(10),
   token1: z.string().min(1).max(10),
-  entry_price_ratio: z.coerce.number().positive(),
-  price_changes: z.array(z.number()).min(1).max(20),
-  fee_apr: z.coerce.number().min(0).max(1000).optional(),
+  entry_price_ratio: z.coerce.number().finite().positive(),
+  price_changes: z.array(z.number().finite().gt(-1)).min(1).max(20),
+  fee_apr: z.coerce.number().finite().min(0).max(1000).optional(),
   days: z.coerce.number().int().min(1).max(3650).optional(),
 });
 
@@ -80,6 +81,11 @@ export default async function toolsRoutes(fastify: FastifyInstance) {
       
       sendSuccess(reply, result, meta);
     } catch (error) {
+      if (error instanceof InvalidImpermanentLossInputError) {
+        Errors.BAD_REQUEST(reply, meta, error.message);
+        return;
+      }
+
       request.log.error(error);
       Errors.INTERNAL_ERROR(reply, meta);
     }
@@ -131,6 +137,11 @@ export default async function toolsRoutes(fastify: FastifyInstance) {
         meta
       );
     } catch (error) {
+      if (error instanceof InvalidImpermanentLossInputError) {
+        Errors.BAD_REQUEST(reply, meta, error.message);
+        return;
+      }
+
       request.log.error(error);
       Errors.INTERNAL_ERROR(reply, meta);
     }

@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  InvalidImpermanentLossInputError,
   calculateILWithFees,
   calculateImpermanentLoss,
   simulateILScenarios,
@@ -47,6 +48,17 @@ describe('calculateImpermanentLoss', () => {
 
     expect(result.ilPercentage).toBe(0);
   });
+
+  it('throws for invalid ratios', () => {
+    expect(() =>
+      calculateImpermanentLoss({
+        token0: 'ETH',
+        token1: 'USDC',
+        entryPriceRatio: 2000,
+        currentPriceRatio: 0,
+      })
+    ).toThrowError(InvalidImpermanentLossInputError);
+  });
 });
 
 describe('simulateILScenarios', () => {
@@ -66,6 +78,19 @@ describe('simulateILScenarios', () => {
     expect(scenarios[2].priceChangePercent).toBe(50);
     expect(scenarios[3].priceChangePercent).toBe(100);
   });
+
+  it('throws when scenario implies a non-positive price ratio', () => {
+    expect(() =>
+      simulateILScenarios(
+        {
+          token0: 'ETH',
+          token1: 'USDC',
+          entryPriceRatio: 2000,
+        },
+        [-1]
+      )
+    ).toThrowError(InvalidImpermanentLossInputError);
+  });
 });
 
 describe('calculateILWithFees', () => {
@@ -84,6 +109,21 @@ describe('calculateILWithFees', () => {
     expect(result.ilPercentage).toBeCloseTo(-5.7191, 4);
     expect(result.feeIncomePercentage).toBeCloseTo(1.6438, 4);
     expect(result.netReturnPercentage).toBeCloseTo(-4.0753, 4);
+  });
+
+  it('throws for invalid fee inputs', () => {
+    expect(() =>
+      calculateILWithFees(
+        {
+          token0: 'ETH',
+          token1: 'USDC',
+          entryPriceRatio: 2000,
+          currentPriceRatio: 2500,
+        },
+        -1,
+        30
+      )
+    ).toThrowError(InvalidImpermanentLossInputError);
   });
 });
 
@@ -105,5 +145,20 @@ describe('simulateILScenariosWithFees', () => {
     expect(scenarios[1].ilPercentage).toBe(0);
     expect(scenarios[2].feeIncomePercentage).toBeCloseTo(0.9863, 4);
     expect(scenarios[2].netReturnPercentage).toBeCloseTo(-1.0341, 4);
+  });
+
+  it('throws for invalid scenario changes', () => {
+    expect(() =>
+      simulateILScenariosWithFees(
+        {
+          token0: 'ETH',
+          token1: 'USDC',
+          entryPriceRatio: 2000,
+        },
+        [-1.5],
+        12,
+        30
+      )
+    ).toThrowError(InvalidImpermanentLossInputError);
   });
 });
