@@ -12,7 +12,9 @@ import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
 import {
+  buildChainLimitMessage,
   buildHistoryLimitMessage,
+  getAllowedChains,
   getDefaultHistoryLookbackDays,
   isDateWithinHistoryWindow,
 } from '../utils/tier.js';
@@ -27,9 +29,10 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   // GET /v1/protocols - List all protocols
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
+    const allowedChains = getAllowedChains(request.apiKey?.tier);
     
     try {
-      const protocols = await protocolService.getAllProtocols();
+      const protocols = await protocolService.getAllProtocols(allowedChains);
       sendSuccess(reply, protocols, meta);
     } catch (error) {
       request.log.error(error);
@@ -41,11 +44,18 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const allowedChains = getAllowedChains(request.apiKey?.tier);
     
     try {
-      const protocol = await protocolService.getProtocolById(protocol_id);
+      const protocol = await protocolService.getProtocolById(protocol_id, allowedChains);
       
       if (!protocol) {
+        const existingProtocol = await protocolService.getProtocolById(protocol_id);
+        if (existingProtocol && allowedChains) {
+          Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+          return;
+        }
+
         Errors.NOT_FOUND(reply, meta, 'Protocol');
         return;
       }
@@ -61,10 +71,17 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id/audit-status', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const allowedChains = getAllowedChains(request.apiKey?.tier);
 
     try {
-      const auditStatus = await protocolService.getProtocolAuditStatus(protocol_id);
+      const auditStatus = await protocolService.getProtocolAuditStatus(protocol_id, allowedChains);
       if (!auditStatus) {
+        const existingProtocol = await protocolService.getProtocolById(protocol_id);
+        if (existingProtocol && allowedChains) {
+          Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+          return;
+        }
+
         Errors.NOT_FOUND(reply, meta, 'Protocol');
         return;
       }
@@ -80,6 +97,7 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id/tvl/history', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const allowedChains = getAllowedChains(request.apiKey?.tier);
     
     const parseResult = historyQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -102,12 +120,17 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
     }
     
     try {
-      const history = await protocolService.getProtocolTvlHistory(protocol_id, from, to);
+      const history = await protocolService.getProtocolTvlHistory(protocol_id, from, to, allowedChains);
       
       if (history.length === 0) {
-        // Check if protocol exists
-        const protocol = await protocolService.getProtocolById(protocol_id);
+        const protocol = await protocolService.getProtocolById(protocol_id, allowedChains);
         if (!protocol) {
+          const existingProtocol = await protocolService.getProtocolById(protocol_id);
+          if (existingProtocol && allowedChains) {
+            Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+            return;
+          }
+
           Errors.NOT_FOUND(reply, meta, 'Protocol');
           return;
         }
@@ -124,14 +147,20 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id/pools', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const allowedChains = getAllowedChains(request.apiKey?.tier);
     
     try {
-      const pools = await protocolService.getProtocolPools(protocol_id);
+      const pools = await protocolService.getProtocolPools(protocol_id, allowedChains);
       
       if (pools.length === 0) {
-        // Check if protocol exists
-        const protocol = await protocolService.getProtocolById(protocol_id);
+        const protocol = await protocolService.getProtocolById(protocol_id, allowedChains);
         if (!protocol) {
+          const existingProtocol = await protocolService.getProtocolById(protocol_id);
+          if (existingProtocol && allowedChains) {
+            Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+            return;
+          }
+
           Errors.NOT_FOUND(reply, meta, 'Protocol');
           return;
         }

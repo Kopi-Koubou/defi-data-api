@@ -2,7 +2,7 @@
  * Protocol service
  */
 
-import { eq, desc, asc, and, gte, lte, sql } from 'drizzle-orm';
+import { eq, desc, asc, and, gte, lte, sql, inArray, type SQL } from 'drizzle-orm';
 import { db, protocols, pools, yields } from '../db/index.js';
 import type { Protocol, Pool, AuditStatus } from '../types/index.js';
 
@@ -34,6 +34,30 @@ export interface ProtocolTvlHistoryPoint {
   tvlUsd: number;
 }
 
+function resolveAllowedChains(allowedChains: string[] | null | undefined): string[] | null {
+  if (!allowedChains || allowedChains.length === 0) {
+    return null;
+  }
+
+  return allowedChains;
+}
+
+function filterChainIds(chainIds: string[], allowedChains: string[] | null): string[] {
+  if (!allowedChains) {
+    return [...chainIds];
+  }
+
+  return chainIds.filter((chainId) => allowedChains.includes(chainId));
+}
+
+function buildChainCondition(allowedChains: string[] | null): SQL<unknown> | undefined {
+  if (!allowedChains) {
+    return undefined;
+  }
+
+  return inArray(pools.chainId, allowedChains);
+}
+
 export function calculatePercentChange(current: number, previous: number): number | null {
   if (!Number.isFinite(current) || !Number.isFinite(previous) || previous <= 0) {
     return null;
@@ -56,47 +80,106 @@ export function findLatestPointAtOrBefore(
   return null;
 }
 
-async function getProtocolPoolIds(protocolId: string): Promise<string[]> {
+async function getProtocolPoolIds(
+  protocolId: string,
+  allowedChains: string[] | null
+): Promise<string[]> {
+  const conditions: SQL<unknown>[] = [eq(pools.protocolId, protocolId)];
+  const chainCondition = buildChainCondition(allowedChains);
+  if (chainCondition) {
+    conditions.push(chainCondition);
+  }
+
   const poolList = await db
     .select({ id: pools.id })
     .from(pools)
-    .where(eq(pools.protocolId, protocolId));
+    .where(and(...conditions));
 
   return poolList.map((p) => p.id);
 }
 
-export async function getAllProtocols(): Promise<ProtocolWithStats[]> {
+export async function getAllProtocols(
+  allowedChainsInput?: string[] | null
+): Promise<ProtocolWithStats[]> {
+  const allowedChains = resolveAllowedChains(allowedChainsInput);
+  const chainCondition = buildChainCondition(allowedChains);
   const results = await db.query.protocols.findMany({
     orderBy: desc(protocols.tvlUsd),
   });
-  
-  // Get pool counts for each protocol
+
   const poolCounts = await db
     .select({
       protocolId: pools.protocolId,
       count: sql<number>`COUNT(*)`.as('count'),
     })
     .from(pools)
+    .where(chainCondition)
     .groupBy(pools.protocolId);
-  
   const countMap = new Map(poolCounts.map((p) => [p.protocolId, p.count]));
-  
-  return results.map((protocol) => ({
-    id: protocol.id,
-    slug: protocol.slug,
-    name: protocol.name,
-    chainIds: protocol.chainIds,
-    category: protocol.category,
-    url: protocol.url,
-    auditStatus: protocol.auditStatus as AuditStatus,
-    tvlUsd: protocol.tvlUsd,
-    createdAt: protocol.createdAt,
-    poolCount: countMap.get(protocol.id) || 0,
-    totalTvlUsd: protocol.tvlUsd,
-  }));
+
+  const latestYieldsSubquery = db
+    .select({
+      poolId: yields.poolId,
+      maxTimestamp: sql<Date>`MAX(${yields.timestamp})`.as('max_timestamp'),
+    })
+    .from(yields)
+    .groupBy(yields.poolId)
+    .as('latest');
+
+  const tvlRows = await db
+    .select({
+      protocolId: pools.protocolId,
+      totalTvlUsd: sql<number>`SUM(${yields.tvlUsd})`.as('total_tvl_usd'),
+    })
+    .from(yields)
+    .innerJoin(pools, eq(yields.poolId, pools.id))
+    .innerJoin(
+      latestYieldsSubquery,
+      and(
+        eq(yields.poolId, latestYieldsSubquery.poolId),
+        eq(yields.timestamp, latestYieldsSubquery.maxTimestamp)
+      )
+    )
+    .where(chainCondition)
+    .groupBy(pools.protocolId);
+  const tvlMap = new Map(tvlRows.map((row) => [row.protocolId, Number(row.totalTvlUsd || 0)]));
+
+  const scopedProtocols = results
+    .map((protocol) => {
+      const scopedChainIds = filterChainIds(protocol.chainIds, allowedChains);
+      if (allowedChains && scopedChainIds.length === 0) {
+        return null;
+      }
+
+      const scopedTvlUsd = tvlMap.get(protocol.id);
+      const totalTvlUsd =
+        scopedTvlUsd !== undefined ? scopedTvlUsd : allowedChains ? 0 : protocol.tvlUsd;
+
+      return {
+        id: protocol.id,
+        slug: protocol.slug,
+        name: protocol.name,
+        chainIds: scopedChainIds,
+        category: protocol.category,
+        url: protocol.url,
+        auditStatus: protocol.auditStatus as AuditStatus,
+        tvlUsd: totalTvlUsd,
+        createdAt: protocol.createdAt,
+        poolCount: countMap.get(protocol.id) || 0,
+        totalTvlUsd,
+      };
+    })
+    .filter((protocol): protocol is ProtocolWithStats => Boolean(protocol));
+
+  scopedProtocols.sort((a, b) => b.totalTvlUsd - a.totalTvlUsd);
+  return scopedProtocols;
 }
 
-export async function getProtocolById(id: string): Promise<ProtocolWithStats | null> {
+export async function getProtocolById(
+  id: string,
+  allowedChainsInput?: string[] | null
+): Promise<ProtocolWithStats | null> {
+  const allowedChains = resolveAllowedChains(allowedChainsInput);
   const protocol = await db.query.protocols.findFirst({
     where: eq(protocols.id, id),
   });
@@ -104,21 +187,33 @@ export async function getProtocolById(id: string): Promise<ProtocolWithStats | n
   if (!protocol) {
     return null;
   }
+
+  const scopedChainIds = filterChainIds(protocol.chainIds, allowedChains);
+  if (allowedChains && scopedChainIds.length === 0) {
+    return null;
+  }
+
+  const conditions: SQL<unknown>[] = [eq(pools.protocolId, id)];
+  const chainCondition = buildChainCondition(allowedChains);
+  if (chainCondition) {
+    conditions.push(chainCondition);
+  }
   
   const poolCount = await db
     .select({ count: sql<number>`COUNT(*)`.as('count') })
     .from(pools)
-    .where(eq(pools.protocolId, id))
+    .where(and(...conditions))
     .then((r) => r[0]?.count || 0);
 
-  const tvlTrend = await getProtocolTvlTrend(id);
-  const effectiveTvlUsd = tvlTrend.currentTvlUsd > 0 ? tvlTrend.currentTvlUsd : protocol.tvlUsd;
+  const tvlTrend = await getProtocolTvlTrend(id, allowedChains);
+  const effectiveTvlUsd =
+    tvlTrend.currentTvlUsd > 0 ? tvlTrend.currentTvlUsd : allowedChains ? 0 : protocol.tvlUsd;
   
   return {
     id: protocol.id,
     slug: protocol.slug,
     name: protocol.name,
-    chainIds: protocol.chainIds,
+    chainIds: scopedChainIds,
     category: protocol.category,
     url: protocol.url,
     auditStatus: protocol.auditStatus as AuditStatus,
@@ -133,10 +228,12 @@ export async function getProtocolById(id: string): Promise<ProtocolWithStats | n
 export async function getProtocolTvlHistory(
   protocolId: string,
   from: Date,
-  to: Date
+  to: Date,
+  allowedChainsInput?: string[] | null
 ): Promise<ProtocolTvlHistoryPoint[]> {
+  const allowedChains = resolveAllowedChains(allowedChainsInput);
   // Get all pool IDs for this protocol
-  const poolIds = await getProtocolPoolIds(protocolId);
+  const poolIds = await getProtocolPoolIds(protocolId, allowedChains);
   if (poolIds.length === 0) {
     return [];
   }
@@ -164,10 +261,14 @@ export async function getProtocolTvlHistory(
   }));
 }
 
-export async function getProtocolTvlTrend(protocolId: string): Promise<ProtocolTvlTrend> {
+export async function getProtocolTvlTrend(
+  protocolId: string,
+  allowedChainsInput?: string[] | null
+): Promise<ProtocolTvlTrend> {
+  const allowedChains = resolveAllowedChains(allowedChainsInput);
   const to = new Date();
   const from = new Date(to.getTime() - 35 * ONE_DAY_MS);
-  const history = await getProtocolTvlHistory(protocolId, from, to);
+  const history = await getProtocolTvlHistory(protocolId, from, to, allowedChains);
 
   if (history.length === 0) {
     return {
@@ -192,13 +293,24 @@ export async function getProtocolTvlTrend(protocolId: string): Promise<ProtocolT
   };
 }
 
-export async function getProtocolAuditStatus(protocolId: string): Promise<ProtocolAuditStatus | null> {
+export async function getProtocolAuditStatus(
+  protocolId: string,
+  allowedChainsInput?: string[] | null
+): Promise<ProtocolAuditStatus | null> {
+  const allowedChains = resolveAllowedChains(allowedChainsInput);
   const protocol = await db.query.protocols.findFirst({
     where: eq(protocols.id, protocolId),
   });
 
   if (!protocol) {
     return null;
+  }
+
+  if (allowedChains) {
+    const scopedChainIds = filterChainIds(protocol.chainIds, allowedChains);
+    if (scopedChainIds.length === 0) {
+      return null;
+    }
   }
 
   return {
@@ -210,9 +322,19 @@ export async function getProtocolAuditStatus(protocolId: string): Promise<Protoc
   };
 }
 
-export async function getProtocolPools(protocolId: string): Promise<Pool[]> {
+export async function getProtocolPools(
+  protocolId: string,
+  allowedChainsInput?: string[] | null
+): Promise<Pool[]> {
+  const allowedChains = resolveAllowedChains(allowedChainsInput);
+  const conditions: SQL<unknown>[] = [eq(pools.protocolId, protocolId)];
+  const chainCondition = buildChainCondition(allowedChains);
+  if (chainCondition) {
+    conditions.push(chainCondition);
+  }
+
   const results = await db.query.pools.findMany({
-    where: eq(pools.protocolId, protocolId),
+    where: and(...conditions),
     orderBy: desc(pools.createdAt),
   });
   
