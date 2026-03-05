@@ -113,6 +113,30 @@ describe('webhook routes', () => {
     expect(whereText).not.toContain('api_key_id');
   });
 
+  it('parses active=false query flag correctly when listing webhooks', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/webhooks?active=false',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [queryArg] = dbMocks.findMany.mock.calls[0];
+    const whereText = whereAsString(queryArg.where);
+    expect(whereText).toContain('active');
+    expect(whereText).toContain('false');
+  });
+
+  it('rejects invalid active query flag values', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/webhooks?active=not-a-boolean',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(dbMocks.findMany).not.toHaveBeenCalled();
+  });
+
   it('deletes a webhook owned by the same user even with a different source api key', async () => {
     dbMocks.findFirst.mockResolvedValue({
       id: 'wh_1',

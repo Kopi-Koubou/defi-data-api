@@ -22,8 +22,27 @@ const createWebhookSchema = z.object({
   url: z.string().url().max(2048),
 });
 
+const queryBooleanSchema = z.preprocess((value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+
+    if (normalized === 'false') {
+      return false;
+    }
+  }
+
+  return value;
+}, z.boolean());
+
 const listWebhookQuerySchema = z.object({
-  active: z.coerce.boolean().optional(),
+  active: queryBooleanSchema.optional(),
   limit: z.coerce.number().min(1).max(200).optional().default(50),
 });
 
