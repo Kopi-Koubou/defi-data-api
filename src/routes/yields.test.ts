@@ -131,6 +131,17 @@ describe('yield routes', () => {
     );
   });
 
+  it('rejects explicitly empty chain filters for yield listing', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields?chain=%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(yieldService.getLatestYields).not.toHaveBeenCalled();
+  });
+
   it('passes asset and asset-pair filters to top yield service', async () => {
     vi.mocked(yieldService.getLatestYields).mockResolvedValue({
       yields: [],
@@ -169,6 +180,17 @@ describe('yield routes', () => {
         protocol: 'aave-v3',
       })
     );
+  });
+
+  it('rejects explicitly empty protocol filters for risk-adjusted yields', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/risk-adjusted?protocol=%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(riskService.getRiskAdjustedYields).not.toHaveBeenCalled();
   });
 
   it('passes asset and asset-pair filters to risk-adjusted service', async () => {

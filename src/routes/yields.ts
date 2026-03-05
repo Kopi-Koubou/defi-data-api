@@ -62,6 +62,10 @@ function normalizeIdentifier(value: string | undefined): string | undefined {
   return normalized;
 }
 
+function isEmptyIdentifier(value: string | undefined): boolean {
+  return value !== undefined && value.trim().length === 0;
+}
+
 export default async function yieldRoutes(fastify: FastifyInstance) {
   // GET /v1/yields - List yields
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -74,6 +78,16 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+    if (isEmptyIdentifier(params.chain)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain filter');
+      return;
+    }
+
+    if (isEmptyIdentifier(params.protocol)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol filter');
+      return;
+    }
+
     const requestedChain = normalizeIdentifier(params.chain);
     const requestedProtocol = normalizeIdentifier(params.protocol);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
@@ -129,6 +143,16 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
+    if (isEmptyIdentifier(params.chain)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain filter');
+      return;
+    }
+
+    if (isEmptyIdentifier(params.protocol)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol filter');
+      return;
+    }
+
     const requestedChain = normalizeIdentifier(params.chain);
     const requestedProtocol = normalizeIdentifier(params.protocol);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
@@ -185,6 +209,16 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
 
     const params = parseResult.data;
+    if (isEmptyIdentifier(params.chain)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain filter');
+      return;
+    }
+
+    if (isEmptyIdentifier(params.protocol)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol filter');
+      return;
+    }
+
     const requestedChain = normalizeIdentifier(params.chain);
     const requestedProtocol = normalizeIdentifier(params.protocol);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
