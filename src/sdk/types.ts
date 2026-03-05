@@ -92,6 +92,19 @@ export interface ChainTvlParams {
   to?: string;
 }
 
+export type WebhookEventType = 'yield_alert' | 'tvl_alert' | 'new_pool_alert';
+
+export interface CreateWebhookPayload {
+  event_type: WebhookEventType;
+  config?: Record<string, unknown>;
+  url: string;
+}
+
+export interface ListWebhooksParams {
+  active?: boolean;
+  limit?: number;
+}
+
 export interface ImpermanentLossParams {
   token0: string;
   token1: string;

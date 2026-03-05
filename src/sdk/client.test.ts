@@ -72,6 +72,73 @@ describe('DefiDataApiClient', () => {
     );
   });
 
+  it('sends webhook create payloads to the webhook endpoint', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(buildSuccessResponse({ id: 'wh_1' }));
+    const client = new DefiDataApiClient({
+      apiKey: 'builder-key',
+      baseUrl: 'https://api.example.com/v1',
+      fetchImpl: fetchMock,
+    });
+
+    await client.createWebhook({
+      event_type: 'yield_alert',
+      config: {
+        threshold: 8,
+        protocol: 'aave-v3',
+      },
+      url: 'https://hooks.example.com/defi',
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.example.com/v1/webhooks');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(
+      JSON.stringify({
+        event_type: 'yield_alert',
+        config: {
+          threshold: 8,
+          protocol: 'aave-v3',
+        },
+        url: 'https://hooks.example.com/defi',
+      })
+    );
+  });
+
+  it('serializes webhook list query params, including false booleans', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(buildSuccessResponse([]));
+    const client = new DefiDataApiClient({
+      apiKey: 'builder-key',
+      baseUrl: 'https://api.example.com/v1',
+      fetchImpl: fetchMock,
+    });
+
+    await client.listWebhooks({
+      active: false,
+      limit: 25,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.example.com/v1/webhooks?active=false&limit=25');
+    expect(init.method).toBe('GET');
+  });
+
+  it('sends delete requests for webhook deletions', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      buildSuccessResponse({ id: 'wh_123', deleted: true })
+    );
+    const client = new DefiDataApiClient({
+      apiKey: 'builder-key',
+      baseUrl: 'https://api.example.com/v1',
+      fetchImpl: fetchMock,
+    });
+
+    await client.deleteWebhook('wh_123');
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.example.com/v1/webhooks/wh_123');
+    expect(init.method).toBe('DELETE');
+  });
+
   it('throws typed api errors for non-2xx responses', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(

@@ -2,9 +2,11 @@ import type {
   ApiErrorEnvelope,
   ApiResponse,
   ChainTvlParams,
+  CreateWebhookPayload,
   DefiDataApiClientOptions,
   ImpermanentLossParams,
   ImpermanentLossSimulationParams,
+  ListWebhooksParams,
   ProtocolTvlHistoryParams,
   RiskAdjustedYieldParams,
   TokenLookupParams,
@@ -247,6 +249,18 @@ export class DefiDataApiClient {
     params?: YieldHistoryParams
   ): Promise<ApiResponse<T>> {
     return this.request<T>('GET', `/pools/${encodeURIComponent(poolId)}/il/history`, params);
+  }
+
+  createWebhook<T = unknown>(payload: CreateWebhookPayload): Promise<ApiResponse<T>> {
+    return this.request<T>('POST', '/webhooks', undefined, payload);
+  }
+
+  listWebhooks<T = unknown>(params?: ListWebhooksParams): Promise<ApiResponse<T>> {
+    return this.request<T>('GET', '/webhooks', params);
+  }
+
+  deleteWebhook<T = unknown>(webhookId: string): Promise<ApiResponse<T>> {
+    return this.request<T>('DELETE', `/webhooks/${encodeURIComponent(webhookId)}`);
   }
 
   calculateImpermanentLoss<T = unknown>(params: ImpermanentLossParams): Promise<ApiResponse<T>> {
