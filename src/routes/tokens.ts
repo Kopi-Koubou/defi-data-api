@@ -57,6 +57,10 @@ function normalizeIdentifier(value: string | undefined): string | undefined {
   return normalized;
 }
 
+function isEmptyIdentifier(value: string | undefined): boolean {
+  return value !== undefined && value.trim().length === 0;
+}
+
 export default async function tokenRoutes(fastify: FastifyInstance) {
   // GET /v1/tokens/:address - Get token info
   fastify.get('/:address', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -71,6 +75,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { chain } = parseResult.data;
+    if (isEmptyIdentifier(chain)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain filter');
+      return;
+    }
+
     const normalizedChain = normalizeIdentifier(chain) || 'ethereum';
     if (!isChainAllowed(normalizedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
@@ -179,6 +188,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { from, to, chain } = parseResult.data;
+    if (isEmptyIdentifier(chain)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain filter');
+      return;
+    }
+
     const normalizedChain = normalizeIdentifier(chain) || 'ethereum';
     if (!isChainAllowed(normalizedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
@@ -272,6 +286,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { q, chain } = parseResult.data;
+    if (isEmptyIdentifier(chain)) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain filter');
+      return;
+    }
+
     const requestedChain = normalizeIdentifier(chain);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
