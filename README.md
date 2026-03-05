@@ -33,6 +33,10 @@ npm run ingest:once
 npm run dev
 ```
 
+After boot:
+- Landing page + live explorer: `http://localhost:3000/`
+- OpenAPI docs: `http://localhost:3000/docs`
+
 ## Data Ingestion
 
 ```bash
@@ -84,6 +88,22 @@ Optional backfill controls:
 - `POST /v1/webhooks` - Create webhook subscription
 - `GET /v1/webhooks` - List webhook subscriptions
 - `DELETE /v1/webhooks/:webhook_id` - Deactivate webhook subscription
+
+## TypeScript SDK
+
+A first-party SDK client is available in `src/sdk` (compiled to `dist/sdk`).
+
+```ts
+import { DefiDataApiClient } from './dist/sdk/index.js';
+
+const client = new DefiDataApiClient({
+  apiKey: 'test-builder-key-67890',
+  baseUrl: 'http://localhost:3000/v1',
+});
+
+const topYields = await client.getTopYields();
+const tokenSearch = await client.searchTokens({ q: 'ETH' });
+```
 
 ## Authentication
 
