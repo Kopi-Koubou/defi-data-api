@@ -1,19 +1,18 @@
 # Implementation Report
 
 ## Summary
-- Read `PRD.md` before implementation. `design-spec.md` and `tech-spec.md` are not present in `/Users/devl/clawd/projects/defi-data-api`, so scoped decisions were made from PRD + current codebase behavior.
-- Checked for `/Users/devl/clawd/projects/defi-data-api/brand.json`; no file exists.
-- Implemented missing first-party SDK coverage for webhook endpoints:
-  - Added webhook SDK types (`WebhookEventType`, `CreateWebhookPayload`, `ListWebhooksParams`).
-  - Added client methods: `createWebhook`, `listWebhooks`, `deleteWebhook`.
-  - Added SDK tests validating POST payload encoding, GET query serialization (including `active=false`), and DELETE request routing.
-- Ran full test and build validation; both pass.
+- Read `PRD.md` before coding. `design-spec.md` and `tech-spec.md` are not present in `/Users/devl/clawd/projects/defi-data-api`, so implementation was scoped from PRD + current code behavior.
+- Checked for `/Users/devl/clawd/projects/defi-data-api/brand.json`; no file currently exists.
+- Implemented scoped landing-page and explorer improvements:
+  - Added optional `brand.json` token overrides for home route design tokens (palette, accent color, font pairing, and custom token overrides).
+  - Fixed base URL generation to include host port from request headers (for accurate quick-start and footer URLs).
+  - Added `POST /v1/tools/impermanent-loss/simulate` to the live API explorer with a realistic default JSON payload and client-side JSON validation.
+  - Updated landing page test assertions for the new base URL behavior and POST explorer endpoint.
+- Ran test and build validation; both pass.
 
 ## Changed Files
-- `src/sdk/client.ts`
-- `src/sdk/client.test.ts`
-- `src/sdk/index.ts`
-- `src/sdk/types.ts`
+- `src/routes/home.ts`
+- `src/routes/home.test.ts`
 - `implementation-report.md`
 
 ## Tests Run
@@ -21,10 +20,10 @@
 - `npm run build` (pass)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` are missing, so scope is inferred rather than validated against finalized downstream specs.
-- SDK webhook methods are unit-tested for request construction, but not yet integration-tested against a running API server.
+- `design-spec.md` and `tech-spec.md` are still missing, so acceptance criteria are inferred from PRD and existing implementation patterns.
+- `brand.json` overrides are validated defensively, but there is no dedicated unit test suite yet for all brand override permutations.
 
 ## Next Steps
-1. Add `design-spec.md` and `tech-spec.md` to align implementation with explicit acceptance criteria.
-2. Add SDK integration tests that run against an in-memory Fastify instance for webhook methods.
-3. Add webhook SDK usage snippets to `README.md` for discoverability.
+1. Add `design-spec.md` and `tech-spec.md` artifacts so feature acceptance can be validated against explicit scope definitions.
+2. Add focused tests for `brand.json` overrides (palette, accent, font pairing, custom token mapping).
+3. Add a short README note documenting supported `brand.json` keys for home page theming.
