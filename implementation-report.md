@@ -1,30 +1,29 @@
 # Implementation Report
 
 ## Summary
-- Reviewed `PRD.md` and implemented the scoped updates using the current codebase because `design-spec.md` and `tech-spec.md` are not present in the repository path.
-- Fixed TVL aggregation correctness for protocol and chain endpoints by using the latest snapshot per pool per interval instead of summing every intraday snapshot.
-  - `GET /v1/protocols/:protocol_id/tvl/history`
-  - `GET /v1/chains/:chain_id/tvl` (history + current TVL)
-- Added token route coverage for scope-critical behavior:
-  - `/v1/tokens/search` routing behavior
-  - free-tier chain gating for token search and token detail endpoints
+- Reviewed `PRD.md` and implemented scoped fixes using current repository artifacts because `design-spec.md` and `tech-spec.md` are not present at the requested path.
+- Hardened token and pool address handling to support non-EVM chains (notably Solana) by normalizing only EVM (`0x...`) addresses to lowercase while preserving case-sensitive non-EVM addresses.
+- Updated token detail/search and pool IL history lookups to use the chain-safe address normalization path so Solana addresses resolve correctly.
+- Added focused tests for non-EVM address behavior.
 
 ## Changed Files
-- `src/services/protocols.ts`
-- `src/routes/chains.ts`
+- `src/utils/address.ts`
+- `src/routes/tokens.ts`
+- `src/services/pools.ts`
+- `src/utils/address.test.ts`
 - `src/routes/tokens.test.ts`
 - `implementation-report.md`
 
 ## Tests Run
-- `npm test` -> pass (`14` files, `61` tests)
+- `npm test` -> pass (`15` files, `65` tests)
 - `npm run build` -> pass
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` are still missing at `/Users/devl/clawd/projects/defi-data-api`, so final scope validation depended on `PRD.md` plus existing implementation patterns.
-- TVL aggregation changes are validated by unit/build checks, but there are still no DB-backed integration tests asserting exact SQL-level rollup behavior with real intraday snapshots.
-- Current token metadata still derives symbol/decimals from pools when available; tokens present only in price feeds may return fallback metadata.
+- `design-spec.md` and `tech-spec.md` remain missing at `/Users/devl/clawd/projects/defi-data-api`, so scope validation was based on `PRD.md` and existing implementation patterns.
+- Address normalization is now chain-safe by `0x` prefix heuristic; if future non-EVM chains use `0x`-prefixed identifiers, a chain-aware normalization map should replace this heuristic.
+- Token metadata still depends primarily on pool-derived symbols/decimals when on-chain metadata is unavailable.
 
 ## Next Steps
-1. Add DB integration tests for protocol/chain TVL rollups using multiple snapshots per pool per day.
-2. Add integration coverage for token detail metadata when only `token_prices` records exist.
-3. Restore `design-spec.md` and `tech-spec.md` so future implementation requests can be validated against explicit scoped specs.
+1. Add integration tests with real seeded Solana token addresses across `/v1/tokens/*` and `/v1/pools/:pool_id/il/history`.
+2. Introduce chain-specific address normalization rules (per chain ID) instead of prefix-only detection.
+3. Restore `design-spec.md` and `tech-spec.md` to make future scoped implementation validation deterministic.
