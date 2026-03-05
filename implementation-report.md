@@ -1,29 +1,39 @@
 # Implementation Report
 
 ## Summary
-- Reviewed `PRD.md` and implemented a scoped token discovery improvement for `/v1/tokens/search`.
-- `design-spec.md` and `tech-spec.md` were not found at `/Users/devl/clawd/projects/defi-data-api`, so implementation decisions were based on `PRD.md` plus existing repository behavior.
-- Improved token search behavior:
-  - Increased search candidate coverage from 50 to 500 pools.
-  - Added deterministic relevance scoring (`exact symbol` > `symbol prefix` > `symbol contains` > `exact address` > `address prefix` > `address contains`).
-  - Preserved response contract while improving ordering quality and recall.
-- Added tests validating candidate scan depth and search result relevance ordering.
+- Read and implemented against `PRD.md` (repo uses uppercase filename). `design-spec.md` and `tech-spec.md` were not found in `/Users/devl/clawd/projects/defi-data-api`, so scope decisions were inferred from PRD + current codebase behavior.
+- Checked for `brand.json`; none exists, so default warm-neutral design tokens were used for UI work.
+- Implemented a new root landing experience at `/`:
+  - Warm, restrained design system (no gradients, single accent color, 4px spacing scale).
+  - Live API explorer for quick authenticated calls to core endpoints.
+  - Preserved `/docs` OpenAPI access.
+- Added a first-party TypeScript SDK module under `src/sdk`:
+  - Typed client with API-key auth.
+  - Methods for scoped endpoint families (yields, protocols, tokens, tools, chains, pools).
+  - Structured error type (`DefiDataApiError`) for non-2xx responses.
+- Added SDK unit tests and updated README usage documentation.
 
 ## Changed Files
-- `src/routes/tokens.ts`
-- `src/routes/tokens.test.ts`
+- `src/routes/home.ts`
+- `src/routes/home.test.ts`
+- `src/index.ts`
+- `src/sdk/client.ts`
+- `src/sdk/client.test.ts`
+- `src/sdk/index.ts`
+- `src/sdk/types.ts`
+- `README.md`
 - `implementation-report.md`
 
 ## Tests Run
-- `node node_modules/vitest/vitest.mjs run src/routes/tokens.test.ts` (pass: 1 file, 14 tests)
-- `npm test` (pass: 15 files, 93 tests)
+- `npm test` (pass: 17 files, 98 tests)
 - `npm run build` (pass)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` remain missing, so scope is inferred from PRD and current implementation rather than finalized stage specs.
-- Token search still derives token metadata primarily from pool records (symbol/name parity and `logoUri: null`), so metadata richness remains limited without a dedicated token registry.
+- `design-spec.md` and `tech-spec.md` are missing, so this implementation is aligned to PRD-era inferred scope rather than finalized downstream stage specs.
+- SDK source is present and compiled, but package publishing/exports strategy is not finalized (no npm packaging workflow was added in this pass).
+- Landing page API explorer uses browser-origin routing and assumes direct API accessibility from that origin; proxy-specific deployments may require URL/environment adaptation.
 
 ## Next Steps
-1. Add `design-spec.md` and `tech-spec.md` to the repo so implementation can be validated against explicit scoped requirements.
-2. Add integration tests for `/v1/tokens/search` against seeded data to validate ranking behavior with real SQL execution.
-3. Add token-name/logo enrichment from a canonical token metadata source to improve search quality and response completeness.
+1. Add `design-spec.md` and `tech-spec.md` for explicit scope verification and acceptance criteria.
+2. Finalize SDK packaging contract (`package.json` exports/versioning/publish workflow).
+3. Add integration tests that exercise SDK calls against a running test app instance.
