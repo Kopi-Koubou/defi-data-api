@@ -17,8 +17,8 @@ import {
 } from '../utils/il-calculator.js';
 
 const ilQuerySchema = z.object({
-  token0: z.string().min(1).max(10),
-  token1: z.string().min(1).max(10),
+  token0: z.string().trim().min(1).max(10),
+  token1: z.string().trim().min(1).max(10),
   entry_price_ratio: z.coerce.number().finite().positive(),
   current_price_ratio: z.coerce.number().finite().positive(),
   fee_apr: z.coerce.number().finite().min(0).max(1000).optional(),
@@ -26,8 +26,8 @@ const ilQuerySchema = z.object({
 });
 
 const ilSimulateSchema = z.object({
-  token0: z.string().min(1).max(10),
-  token1: z.string().min(1).max(10),
+  token0: z.string().trim().min(1).max(10),
+  token1: z.string().trim().min(1).max(10),
   entry_price_ratio: z.coerce.number().finite().positive(),
   price_changes: z.array(z.number().finite().gt(-1)).min(1).max(20),
   fee_apr: z.coerce.number().finite().min(0).max(1000).optional(),

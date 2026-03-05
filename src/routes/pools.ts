@@ -20,11 +20,26 @@ const ilHistoryQuerySchema = z.object({
   interval: z.enum(['1h', '1d', '1w']).optional().default('1d'),
 });
 
+function normalizePathIdentifier(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 export default async function poolRoutes(fastify: FastifyInstance) {
   // GET /v1/pools/:pool_id/risk-score
   fastify.get('/:pool_id/risk-score', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { pool_id } = request.params as { pool_id: string };
+    const normalizedPoolId = normalizePathIdentifier(pool_id);
+
+    if (!normalizedPoolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid pool id');
+      return;
+    }
 
     if (!hasRiskAccess(request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, 'Risk scores are available on paid tiers');
@@ -32,7 +47,7 @@ export default async function poolRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const riskScore = await riskService.getPoolRiskScore(pool_id);
+      const riskScore = await riskService.getPoolRiskScore(normalizedPoolId);
 
       if (!riskScore) {
         Errors.NOT_FOUND(reply, meta, 'Pool');
@@ -55,6 +70,12 @@ export default async function poolRoutes(fastify: FastifyInstance) {
   fastify.get('/:pool_id/il/history', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { pool_id } = request.params as { pool_id: string };
+    const normalizedPoolId = normalizePathIdentifier(pool_id);
+
+    if (!normalizedPoolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid pool id');
+      return;
+    }
 
     const parseResult = ilHistoryQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -77,7 +98,7 @@ export default async function poolRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const history = await poolService.getPoolIlHistory(pool_id, {
+      const history = await poolService.getPoolIlHistory(normalizedPoolId, {
         from: fromDate,
         to: toDate,
         interval,

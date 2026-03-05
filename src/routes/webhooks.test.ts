@@ -173,6 +173,17 @@ describe('webhook routes', () => {
     expect(dbMocks.updateWhere).not.toHaveBeenCalled();
   });
 
+  it('rejects empty webhook ids for delete endpoint', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/webhooks/%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(dbMocks.findFirst).not.toHaveBeenCalled();
+  });
+
   it('rejects webhook endpoints for free tier', async () => {
     const response = await app.inject({
       method: 'GET',

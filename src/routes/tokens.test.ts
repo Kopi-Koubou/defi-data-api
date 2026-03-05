@@ -275,6 +275,28 @@ describe('token routes', () => {
     expect(dbMocks.findTokenPriceFirst).not.toHaveBeenCalled();
   });
 
+  it('rejects explicitly empty token addresses for token detail', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tokens/%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(dbMocks.findTokenPriceFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects explicitly empty token addresses for token price history', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tokens/%20%20/price/history',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(dbMocks.selectDistinct).not.toHaveBeenCalled();
+  });
+
   it('rejects explicitly empty chain filters for token search', async () => {
     const response = await app.inject({
       method: 'GET',

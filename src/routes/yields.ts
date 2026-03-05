@@ -66,6 +66,15 @@ function isEmptyIdentifier(value: string | undefined): boolean {
   return value !== undefined && value.trim().length === 0;
 }
 
+function normalizePathIdentifier(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 export default async function yieldRoutes(fastify: FastifyInstance) {
   // GET /v1/yields - List yields
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -250,9 +259,15 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
   fastify.get('/:pool_id', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { pool_id } = request.params as { pool_id: string };
+    const normalizedPoolId = normalizePathIdentifier(pool_id);
+
+    if (!normalizedPoolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid pool id');
+      return;
+    }
     
     try {
-      const yieldData = await yieldService.getYieldByPoolId(pool_id);
+      const yieldData = await yieldService.getYieldByPoolId(normalizedPoolId);
       
       if (!yieldData) {
         Errors.NOT_FOUND(reply, meta, 'Pool');
@@ -275,6 +290,12 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
   fastify.get('/:pool_id/history', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { pool_id } = request.params as { pool_id: string };
+    const normalizedPoolId = normalizePathIdentifier(pool_id);
+
+    if (!normalizedPoolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid pool id');
+      return;
+    }
     
     const parseResult = historyQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -301,7 +322,7 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     try {
-      const poolYield = await yieldService.getYieldByPoolId(pool_id);
+      const poolYield = await yieldService.getYieldByPoolId(normalizedPoolId);
       if (!poolYield) {
         Errors.NOT_FOUND(reply, meta, 'Pool');
         return;
@@ -312,7 +333,12 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         return;
       }
 
-      const history = await yieldService.getYieldHistory(pool_id, from, to, params.interval);
+      const history = await yieldService.getYieldHistory(
+        normalizedPoolId,
+        from,
+        to,
+        params.interval
+      );
       
       sendSuccess(reply, history, meta);
     } catch (error) {

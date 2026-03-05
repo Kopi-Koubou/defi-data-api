@@ -67,6 +67,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     const meta = createResponseMeta();
     const { address } = request.params as { address: string };
     const normalizedAddress = normalizeAddress(address);
+
+    if (!normalizedAddress) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid token address');
+      return;
+    }
     
     const parseResult = tokenQuerySchema.safeParse(request.query);
     if (!parseResult.success) {
@@ -180,6 +185,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     const meta = createResponseMeta();
     const { address } = request.params as { address: string };
     const normalizedAddress = normalizeAddress(address);
+
+    if (!normalizedAddress) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid token address');
+      return;
+    }
     
     const parseResult = priceHistorySchema.safeParse(request.query);
     if (!parseResult.success) {

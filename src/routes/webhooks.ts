@@ -47,7 +47,7 @@ const listWebhookQuerySchema = z.object({
 });
 
 const webhookParamsSchema = z.object({
-  webhook_id: z.string().min(1).max(64),
+  webhook_id: z.string().trim().min(1).max(64),
 });
 
 function ensurePaidTierAccess(

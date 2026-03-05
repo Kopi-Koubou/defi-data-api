@@ -104,6 +104,34 @@ describe('tools routes', () => {
     expect(payload.error.code).toBe('BAD_REQUEST');
   });
 
+  it('rejects whitespace-only token symbols for single IL requests', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tools/impermanent-loss?token0=%20%20&token1=USDC&entry_price_ratio=2000&current_price_ratio=2400',
+    });
+
+    expect(response.statusCode).toBe(400);
+    const payload = response.json();
+    expect(payload.error.code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects whitespace-only token symbols for simulation requests', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/impermanent-loss/simulate',
+      payload: {
+        token0: 'ETH',
+        token1: '   ',
+        entry_price_ratio: 2000,
+        price_changes: [-0.2, 0.2],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const payload = response.json();
+    expect(payload.error.code).toBe('BAD_REQUEST');
+  });
+
   it('rejects batch simulation for free tier', async () => {
     const response = await app.inject({
       method: 'POST',

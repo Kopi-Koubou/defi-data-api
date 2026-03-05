@@ -193,6 +193,29 @@ describe('yield routes', () => {
     expect(riskService.getRiskAdjustedYields).not.toHaveBeenCalled();
   });
 
+  it('rejects empty pool ids for yield detail routes', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(yieldService.getYieldByPoolId).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty pool ids for yield history routes', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/%20%20/history',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(yieldService.getYieldByPoolId).not.toHaveBeenCalled();
+    expect(yieldService.getYieldHistory).not.toHaveBeenCalled();
+  });
+
   it('passes asset and asset-pair filters to risk-adjusted service', async () => {
     vi.mocked(riskService.getRiskAdjustedYields).mockResolvedValue([]);
 

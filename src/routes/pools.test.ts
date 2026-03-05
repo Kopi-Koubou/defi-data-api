@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import poolRoutes from './pools.js';
 import * as poolService from '../services/pools.js';
+import * as riskService from '../services/risk.js';
 
 vi.mock('../services/pools.js', () => ({
   getPoolIlHistory: vi.fn(),
@@ -76,5 +77,27 @@ describe('pool routes', () => {
 
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('FORBIDDEN');
+  });
+
+  it('rejects empty pool ids for risk-score route', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/pools/%20%20/risk-score',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(riskService.getPoolRiskScore).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty pool ids for IL history route', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/pools/%20%20/il/history',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(poolService.getPoolIlHistory).not.toHaveBeenCalled();
   });
 });
