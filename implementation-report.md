@@ -1,29 +1,29 @@
 # Implementation Report
 
 ## Summary
-- Reviewed `PRD.md` and implemented the currently scoped yield-route input hardening.
-- `design-spec.md` and `tech-spec.md` were not found at `/Users/devl/clawd/projects/defi-data-api` (locally or on `origin/main`), so scope decisions were based on `PRD.md` plus current repository behavior.
-- Hardened yield filter validation to reject malformed/blank asset filters instead of silently returning empty results:
-  - `asset` now trims and rejects whitespace-only values.
-  - `asset_pair` now trims and validates that it resolves to exactly two non-empty assets.
-  - Validation applies consistently across `/v1/yields`, `/v1/yields/top`, and `/v1/yields/risk-adjusted`.
-- Added route tests covering the new `400 BAD_REQUEST` behavior.
+- Reviewed `PRD.md` and implemented a scoped token discovery improvement for `/v1/tokens/search`.
+- `design-spec.md` and `tech-spec.md` were not found at `/Users/devl/clawd/projects/defi-data-api`, so implementation decisions were based on `PRD.md` plus existing repository behavior.
+- Improved token search behavior:
+  - Increased search candidate coverage from 50 to 500 pools.
+  - Added deterministic relevance scoring (`exact symbol` > `symbol prefix` > `symbol contains` > `exact address` > `address prefix` > `address contains`).
+  - Preserved response contract while improving ordering quality and recall.
+- Added tests validating candidate scan depth and search result relevance ordering.
 
 ## Changed Files
-- `src/routes/yields.ts`
-- `src/routes/yields.test.ts`
+- `src/routes/tokens.ts`
+- `src/routes/tokens.test.ts`
 - `implementation-report.md`
 
 ## Tests Run
-- `node node_modules/vitest/vitest.mjs run src/routes/yields.test.ts` (pass: 1 file, 16 tests)
-- `npm test` (pass: 15 files, 91 tests)
+- `node node_modules/vitest/vitest.mjs run src/routes/tokens.test.ts` (pass: 1 file, 14 tests)
+- `npm test` (pass: 15 files, 93 tests)
 - `npm run build` (pass)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` remain missing, so implementation is inferred from PRD + current codebase behavior rather than finalized scoped specs.
-- Requests that previously passed malformed asset filters (for example `asset=%20%20` or `asset_pair=%20-%20`) now fail with `400 BAD_REQUEST`; clients relying on permissive behavior will need to adjust.
+- `design-spec.md` and `tech-spec.md` remain missing, so scope is inferred from PRD and current implementation rather than finalized stage specs.
+- Token search still derives token metadata primarily from pool records (symbol/name parity and `logoUri: null`), so metadata richness remains limited without a dedicated token registry.
 
 ## Next Steps
-1. Add `design-spec.md` and `tech-spec.md` to the repo so future implementation can map directly to finalized scope.
-2. Add integration coverage for yield filters against a seeded DB to verify query behavior end-to-end (not only route-layer validation).
-3. Consider extracting shared filter schema helpers for yields/risk routes to keep validation logic centralized.
+1. Add `design-spec.md` and `tech-spec.md` to the repo so implementation can be validated against explicit scoped requirements.
+2. Add integration tests for `/v1/tokens/search` against seeded data to validate ranking behavior with real SQL execution.
+3. Add token-name/logo enrichment from a canonical token metadata source to improve search quality and response completeness.
