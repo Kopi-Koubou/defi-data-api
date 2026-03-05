@@ -110,6 +110,28 @@ describe('yield routes', () => {
     );
   });
 
+  it('rejects whitespace-only asset filters for yield listing', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields?asset=%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(yieldService.getLatestYields).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed asset-pair filters for yield listing', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields?asset_pair=%20-%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(yieldService.getLatestYields).not.toHaveBeenCalled();
+  });
+
   it('normalizes chain and protocol filters for yield listing', async () => {
     vi.mocked(yieldService.getLatestYields).mockResolvedValue({
       yields: [],
@@ -129,6 +151,17 @@ describe('yield routes', () => {
         protocol: 'aave-v3',
       })
     );
+  });
+
+  it('rejects whitespace-only asset filters for top yields', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/top?asset=%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(yieldService.getLatestYields).not.toHaveBeenCalled();
   });
 
   it('rejects explicitly empty chain filters for yield listing', async () => {
@@ -231,5 +264,27 @@ describe('yield routes', () => {
         assetPair: 'USDC-ETH',
       })
     );
+  });
+
+  it('rejects whitespace-only asset filters for risk-adjusted yields', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/risk-adjusted?asset=%20%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(riskService.getRiskAdjustedYields).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed asset-pair filters for risk-adjusted yields', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/risk-adjusted?asset_pair=%20-%20',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('BAD_REQUEST');
+    expect(riskService.getRiskAdjustedYields).not.toHaveBeenCalled();
   });
 });

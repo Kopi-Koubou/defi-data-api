@@ -23,11 +23,28 @@ import * as yieldService from '../services/yields.js';
 import * as riskService from '../services/risk.js';
 import type { PoolType } from '../types/index.js';
 
+function isValidAssetPairFilter(value: string): boolean {
+  const parts = value
+    .split(/[\/\-_:]/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  return parts.length === 2;
+}
+
 const querySchema = z.object({
   chain: z.string().optional(),
   protocol: z.string().optional(),
-  asset: z.string().min(1).max(64).optional(),
-  asset_pair: z.string().min(3).max(128).regex(/^[^/\-_:]+[/\-_:][^/\-_:]+$/).optional(),
+  asset: z.string().trim().min(1).max(64).optional(),
+  asset_pair: z.string()
+    .trim()
+    .min(3)
+    .max(128)
+    .regex(/^[^/\-_:]+[/\-_:][^/\-_:]+$/)
+    .refine(isValidAssetPairFilter, {
+      message: 'Invalid asset pair filter',
+    })
+    .optional(),
   min_tvl: z.coerce.number().min(0).optional(),
   pool_type: z.enum(['lending', 'lp', 'staking', 'vault', 'restaking']).optional(),
   sort_by: z.enum(['apy', 'tvl']).optional().default('tvl'),
@@ -44,8 +61,16 @@ const historyQuerySchema = z.object({
 const riskAdjustedQuerySchema = z.object({
   chain: z.string().optional(),
   protocol: z.string().optional(),
-  asset: z.string().min(1).max(64).optional(),
-  asset_pair: z.string().min(3).max(128).regex(/^[^/\-_:]+[/\-_:][^/\-_:]+$/).optional(),
+  asset: z.string().trim().min(1).max(64).optional(),
+  asset_pair: z.string()
+    .trim()
+    .min(3)
+    .max(128)
+    .regex(/^[^/\-_:]+[/\-_:][^/\-_:]+$/)
+    .refine(isValidAssetPairFilter, {
+      message: 'Invalid asset pair filter',
+    })
+    .optional(),
   min_tvl: z.coerce.number().min(0).optional(),
   pool_type: z.enum(['lending', 'lp', 'staking', 'vault', 'restaking']).optional(),
   min_score: z.coerce.number().min(0).max(100).optional().default(0),
