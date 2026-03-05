@@ -1,29 +1,27 @@
 # Implementation Report
 
 ## Summary
-- Reviewed `PRD.md` and implemented scoped fixes using current repository artifacts because `design-spec.md` and `tech-spec.md` are not present at the requested path.
-- Hardened token and pool address handling to support non-EVM chains (notably Solana) by normalizing only EVM (`0x...`) addresses to lowercase while preserving case-sensitive non-EVM addresses.
-- Updated token detail/search and pool IL history lookups to use the chain-safe address normalization path so Solana addresses resolve correctly.
-- Added focused tests for non-EVM address behavior.
+- Reviewed `/Users/devl/clawd/projects/defi-data-api/PRD.md` and validated current repository scope against implemented API routes/services.
+- `design-spec.md` and `tech-spec.md` are not present at `/Users/devl/clawd/projects/defi-data-api`; scope decisions were therefore validated against `PRD.md` and existing implementation/tests.
+- Implemented a scoped behavior fix for webhook query filtering:
+  - `GET /v1/webhooks?active=false` now correctly parses to boolean `false` (previously parsed as `true` due to generic coercion semantics).
+  - Invalid boolean-like values for `active` now return `400 BAD_REQUEST`.
+- Added/updated tests to lock behavior for both valid and invalid `active` query values.
 
 ## Changed Files
-- `src/utils/address.ts`
-- `src/routes/tokens.ts`
-- `src/services/pools.ts`
-- `src/utils/address.test.ts`
-- `src/routes/tokens.test.ts`
+- `src/routes/webhooks.ts`
+- `src/routes/webhooks.test.ts`
 - `implementation-report.md`
 
 ## Tests Run
-- `npm test` -> pass (`15` files, `65` tests)
-- `npm run build` -> pass
+- `npm run test` (pass: 15 files, 67 tests)
+- `npm run build` (pass)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` remain missing at `/Users/devl/clawd/projects/defi-data-api`, so scope validation was based on `PRD.md` and existing implementation patterns.
-- Address normalization is now chain-safe by `0x` prefix heuristic; if future non-EVM chains use `0x`-prefixed identifiers, a chain-aware normalization map should replace this heuristic.
-- Token metadata still depends primarily on pool-derived symbols/decimals when on-chain metadata is unavailable.
+- `design-spec.md` and `tech-spec.md` are still missing from the requested path, so scope verification depends on `PRD.md` plus repository state.
+- Linting is currently not executable with the checked-in setup (`eslint.config.*` missing for ESLint v9), so static lint validation is not part of this run.
 
 ## Next Steps
-1. Add integration tests with real seeded Solana token addresses across `/v1/tokens/*` and `/v1/pools/:pool_id/il/history`.
-2. Introduce chain-specific address normalization rules (per chain ID) instead of prefix-only detection.
-3. Restore `design-spec.md` and `tech-spec.md` to make future scoped implementation validation deterministic.
+1. Add `design-spec.md` and `tech-spec.md` to the repository to remove ambiguity for future scoped implementation requests.
+2. Add an ESLint flat config (`eslint.config.js|mjs`) so `npm run lint` can be used in CI and local verification.
+3. Add integration tests for webhook list filtering against a real database fixture to validate SQL predicate behavior end-to-end.
