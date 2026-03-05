@@ -1,6 +1,7 @@
 import { and, asc, eq, gte, lte, or, sql } from 'drizzle-orm';
 
 import { db, pools, tokenPrices } from '../db/index.js';
+import { normalizeAddress } from '../utils/address.js';
 import { buildIlHistorySeries, type IlHistoryPoint } from '../utils/il-history.js';
 
 export interface PoolIlHistoryQuery {
@@ -62,8 +63,8 @@ export async function getPoolIlHistory(
     throw new UnsupportedPoolError('Impermanent loss history is available only for two-token pools');
   }
 
-  const token0Address = pool.token0Address.toLowerCase();
-  const token1Address = pool.token1Address.toLowerCase();
+  const token0Address = normalizeAddress(pool.token0Address);
+  const token1Address = normalizeAddress(pool.token1Address);
   const intervalExpr = resolveIntervalExpression(query.interval);
 
   const rows = await db
@@ -97,9 +98,11 @@ export async function getPoolIlHistory(
     const key = timestamp.toISOString();
     const item = alignedMap.get(key) || { timestamp };
 
-    if (row.tokenAddress === token0Address) {
+    const normalizedRowAddress = normalizeAddress(row.tokenAddress);
+
+    if (normalizedRowAddress === token0Address) {
       item.token0PriceUsd = Number(row.avgPriceUsd);
-    } else if (row.tokenAddress === token1Address) {
+    } else if (normalizedRowAddress === token1Address) {
       item.token1PriceUsd = Number(row.avgPriceUsd);
     }
 

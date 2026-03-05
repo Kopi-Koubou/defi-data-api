@@ -9,6 +9,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createResponseMeta, sendSuccess, Errors } from '../utils/response.js';
 import { isDateRangeValid, resolveDateRange } from '../utils/date-range.js';
+import { normalizeAddress } from '../utils/address.js';
 import {
   buildChainLimitMessage,
   buildHistoryLimitMessage,
@@ -45,10 +46,6 @@ interface TokenInfo {
   updatedAt: Date | null;
   deployments: string[];
   logoUri: string | null;
-}
-
-function normalizeAddress(address: string): string {
-  return address.trim().toLowerCase();
 }
 
 export default async function tokenRoutes(fastify: FastifyInstance) {
@@ -137,7 +134,10 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
         .filter((chainId) => !allowedChains || allowedChains.includes(chainId))
         .sort();
 
-      const isToken0 = metadataPool?.token0Address.toLowerCase() === normalizedAddress;
+      const isToken0 =
+        metadataPool !== null && metadataPool !== undefined
+          ? normalizeAddress(metadataPool.token0Address) === normalizedAddress
+          : false;
       const tokenInfo: TokenInfo = {
         address: normalizedAddress,
         chainId: normalizedChain,
@@ -287,13 +287,15 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
       const tokenMap = new Map<string, TokenInfo>();
       
       for (const pool of poolResults) {
-        const token0Address = pool.token0Address.toLowerCase();
-        const token1Address = pool.token1Address?.toLowerCase() || null;
+        const token0Address = normalizeAddress(pool.token0Address);
+        const token1Address = pool.token1Address ? normalizeAddress(pool.token1Address) : null;
+        const token0AddressForSearch = pool.token0Address.toLowerCase();
+        const token1AddressForSearch = pool.token1Address?.toLowerCase() || null;
 
         // Token0
         if (
           pool.token0Symbol.toLowerCase().includes(searchTerm) ||
-          token0Address.includes(searchTerm)
+          token0AddressForSearch.includes(searchTerm)
         ) {
           const key = `${pool.chainId}-${token0Address}`;
           if (!tokenMap.has(key)) {
@@ -316,7 +318,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
           pool.token1Symbol &&
           token1Address &&
           (pool.token1Symbol.toLowerCase().includes(searchTerm) ||
-            token1Address.includes(searchTerm))
+            Boolean(token1AddressForSearch?.includes(searchTerm)))
         ) {
           const key = `${pool.chainId}-${token1Address}`;
           if (!tokenMap.has(key)) {
@@ -352,11 +354,11 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
           .orderBy(tokenPrices.tokenAddress, tokenPrices.chainId, desc(tokenPrices.timestamp));
         
         const priceMap = new Map(
-          prices.map((p) => [`${p.chainId}-${p.tokenAddress.toLowerCase()}`, p])
+          prices.map((p) => [`${p.chainId}-${normalizeAddress(p.tokenAddress)}`, p])
         );
         
         for (const token of tokens) {
-          const price = priceMap.get(`${token.chainId}-${token.address.toLowerCase()}`);
+          const price = priceMap.get(`${token.chainId}-${token.address}`);
           if (price) {
             token.priceUsd = price.priceUsd;
             token.updatedAt = price.timestamp;
