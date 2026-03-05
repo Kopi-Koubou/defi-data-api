@@ -1,6 +1,224 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-function renderHomePage(origin: string): string {
+interface HomeBrandConfig {
+  palette?: string;
+  accentColor?: string;
+  fontPairing?: {
+    heading?: string;
+    body?: string;
+  };
+  customTokens?: Record<string, unknown>;
+}
+
+interface HomeDesignTokens {
+  colorBg: string;
+  colorSurface: string;
+  colorText: string;
+  colorTextMuted: string;
+  colorBorder: string;
+  colorAccent: string;
+  colorAccentSoft: string;
+  colorMonoBg: string;
+  colorInputBg: string;
+  colorButtonText: string;
+  fontHeading: string;
+  fontBody: string;
+}
+
+const DEFAULT_TOKENS: HomeDesignTokens = {
+  colorBg: '#f8f7f4',
+  colorSurface: '#fffdfa',
+  colorText: '#1c1a17',
+  colorTextMuted: '#6d675f',
+  colorBorder: '#e7e1d8',
+  colorAccent: '#c96b3c',
+  colorAccentSoft: '#f3e8e0',
+  colorMonoBg: '#f4f0ea',
+  colorInputBg: '#fffdf9',
+  colorButtonText: '#fffdfa',
+  fontHeading: "'Source Serif 4', Georgia, serif",
+  fontBody: "'DM Sans', system-ui, sans-serif",
+};
+
+const PALETTE_TOKENS: Record<string, Partial<HomeDesignTokens>> = {
+  'warm-neutral': {
+    colorBg: '#f8f7f4',
+    colorSurface: '#fffdfa',
+    colorText: '#1c1a17',
+    colorTextMuted: '#6d675f',
+    colorBorder: '#e7e1d8',
+    colorAccentSoft: '#f3e8e0',
+    colorMonoBg: '#f4f0ea',
+    colorInputBg: '#fffdf9',
+    colorButtonText: '#fffdfa',
+  },
+  'cool-professional': {
+    colorBg: '#f5f6f5',
+    colorSurface: '#fcfcfa',
+    colorText: '#1c1f22',
+    colorTextMuted: '#67707a',
+    colorBorder: '#dde3e8',
+    colorAccent: '#2f6f8f',
+    colorAccentSoft: '#e4eef3',
+    colorMonoBg: '#edf1f4',
+    colorInputBg: '#fafcfd',
+    colorButtonText: '#fdfcf9',
+  },
+  'bold-minimal': {
+    colorBg: '#f9f4ec',
+    colorSurface: '#fffaf0',
+    colorText: '#1f1a14',
+    colorTextMuted: '#6e6458',
+    colorBorder: '#e8dccf',
+    colorAccent: '#b25d2a',
+    colorAccentSoft: '#f4e6db',
+    colorMonoBg: '#f2e8dd',
+    colorInputBg: '#fff9f1',
+    colorButtonText: '#fff9f1',
+  },
+  'dark-premium': {
+    colorBg: '#121210',
+    colorSurface: '#1b1a18',
+    colorText: '#ebe6dd',
+    colorTextMuted: '#a59d90',
+    colorBorder: '#2d2a24',
+    colorAccent: '#d28b57',
+    colorAccentSoft: '#33251b',
+    colorMonoBg: '#201e1a',
+    colorInputBg: '#24211c',
+    colorButtonText: '#1b1a18',
+  },
+};
+
+const TOKEN_KEY_MAP: Record<string, keyof HomeDesignTokens> = {
+  '--color-bg': 'colorBg',
+  '--color-surface': 'colorSurface',
+  '--color-text': 'colorText',
+  '--color-text-muted': 'colorTextMuted',
+  '--color-border': 'colorBorder',
+  '--color-accent': 'colorAccent',
+  '--color-accent-soft': 'colorAccentSoft',
+  '--color-mono-bg': 'colorMonoBg',
+  '--color-input-bg': 'colorInputBg',
+  '--color-button-text': 'colorButtonText',
+  '--font-heading': 'fontHeading',
+  '--font-body': 'fontBody',
+};
+
+function toCssVariableName(key: string): string {
+  if (!key) {
+    return '';
+  }
+
+  const normalized = key.trim();
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.startsWith('--')
+    ? normalized
+    : `--${normalized.replace(/_/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+}
+
+function sanitizeCssValue(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (/[{};]/.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function sanitizeFontName(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!/^[a-zA-Z0-9\s-]+$/.test(normalized)) {
+    return null;
+  }
+
+  return normalized.replace(/\s+/g, ' ');
+}
+
+function buildFontStack(fontName: string | null, fallback: string): string {
+  if (!fontName) {
+    return fallback;
+  }
+
+  return `'${fontName}', ${fallback}`;
+}
+
+function resolveProjectBrandConfig(projectRoot: string): HomeBrandConfig | null {
+  try {
+    const brandPath = join(projectRoot, 'brand.json');
+    const raw = readFileSync(brandPath, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+
+    return parsed as HomeBrandConfig;
+  } catch {
+    return null;
+  }
+}
+
+function resolveHomeDesignTokens(projectRoot: string): HomeDesignTokens {
+  const brand = resolveProjectBrandConfig(projectRoot);
+  const paletteTokens = brand?.palette ? PALETTE_TOKENS[brand.palette] || {} : {};
+  const tokens: HomeDesignTokens = {
+    ...DEFAULT_TOKENS,
+    ...paletteTokens,
+  };
+
+  const accentOverride = sanitizeCssValue(brand?.accentColor);
+  if (accentOverride) {
+    tokens.colorAccent = accentOverride;
+  }
+
+  tokens.fontHeading = buildFontStack(
+    sanitizeFontName(brand?.fontPairing?.heading),
+    'Georgia, serif'
+  );
+  tokens.fontBody = buildFontStack(
+    sanitizeFontName(brand?.fontPairing?.body),
+    'system-ui, sans-serif'
+  );
+
+  if (brand?.customTokens && typeof brand.customTokens === 'object') {
+    for (const [rawKey, rawValue] of Object.entries(brand.customTokens)) {
+      const cssVariable = toCssVariableName(rawKey);
+      const tokenKey = TOKEN_KEY_MAP[cssVariable];
+      const tokenValue = sanitizeCssValue(rawValue);
+
+      if (!tokenKey || !tokenValue) {
+        continue;
+      }
+
+      tokens[tokenKey] = tokenValue;
+    }
+  }
+
+  return tokens;
+}
+
+function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
   const baseApiUrl = `${origin}/v1`;
 
   return `<!doctype html>
@@ -14,15 +232,18 @@ function renderHomePage(origin: string): string {
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet" />
     <style>
       :root {
-        --color-bg: #f8f7f4;
-        --color-surface: #fffdfa;
-        --color-text: #1c1a17;
-        --color-text-muted: #6d675f;
-        --color-border: #e7e1d8;
-        --color-accent: #c96b3c;
-        --color-accent-soft: #f3e8e0;
-        --font-heading: 'Source Serif 4', Georgia, serif;
-        --font-body: 'DM Sans', system-ui, sans-serif;
+        --color-bg: ${tokens.colorBg};
+        --color-surface: ${tokens.colorSurface};
+        --color-text: ${tokens.colorText};
+        --color-text-muted: ${tokens.colorTextMuted};
+        --color-border: ${tokens.colorBorder};
+        --color-accent: ${tokens.colorAccent};
+        --color-accent-soft: ${tokens.colorAccentSoft};
+        --color-mono-bg: ${tokens.colorMonoBg};
+        --color-input-bg: ${tokens.colorInputBg};
+        --color-button-text: ${tokens.colorButtonText};
+        --font-heading: ${tokens.fontHeading};
+        --font-body: ${tokens.fontBody};
         --space-1: 4px;
         --space-2: 8px;
         --space-3: 12px;
@@ -136,7 +357,7 @@ function renderHomePage(origin: string): string {
         font-size: 14px;
         border: 1px solid var(--color-border);
         border-radius: 8px;
-        background: #f4f0ea;
+        background: var(--color-mono-bg);
         padding: var(--space-3);
         overflow-x: auto;
         margin: 0;
@@ -167,7 +388,7 @@ function renderHomePage(origin: string): string {
         width: 100%;
         border: 1px solid var(--color-border);
         border-radius: 8px;
-        background: #fffdf9;
+        background: var(--color-input-bg);
         color: var(--color-text);
         padding: var(--space-3);
       }
@@ -194,7 +415,7 @@ function renderHomePage(origin: string): string {
         border-radius: 8px;
         padding: 0 var(--space-4);
         background: var(--color-accent);
-        color: #fffdfa;
+        color: var(--color-button-text);
         font-weight: 600;
         cursor: pointer;
       }
@@ -289,6 +510,7 @@ function renderHomePage(origin: string): string {
                 <option value="protocols">GET /v1/protocols</option>
                 <option value="token-search">GET /v1/tokens/search?q=ETH</option>
                 <option value="il">GET /v1/tools/impermanent-loss</option>
+                <option value="simulate-il">POST /v1/tools/impermanent-loss/simulate</option>
                 <option value="chain-tvl">GET /v1/chains/ethereum/tvl</option>
               </select>
             </div>
@@ -342,9 +564,23 @@ function renderHomePage(origin: string): string {
           method: 'GET',
           path: '/v1/tools/impermanent-loss?token0=ETH&token1=USDC&entry_price_ratio=2000&current_price_ratio=2500',
         },
+        'simulate-il': {
+          method: 'POST',
+          path: '/v1/tools/impermanent-loss/simulate',
+        },
         'chain-tvl': {
           method: 'GET',
           path: '/v1/chains/ethereum/tvl',
+        },
+      };
+      const postPayloadTemplates = {
+        'simulate-il': {
+          token0: 'ETH',
+          token1: 'USDC',
+          entry_price_ratio: 2000,
+          price_changes: [-0.5, -0.25, 0, 0.25, 0.5],
+          fee_apr: 12,
+          days: 30,
         },
       };
 
@@ -357,7 +593,7 @@ function renderHomePage(origin: string): string {
       function updatePayloadPlaceholder() {
         const config = endpoints[endpointSelect.value];
         payloadInput.value = config.method === 'POST'
-          ? JSON.stringify({ example: true }, null, 2)
+          ? JSON.stringify(postPayloadTemplates[endpointSelect.value] || {}, null, 2)
           : '';
       }
 
@@ -380,8 +616,16 @@ function renderHomePage(origin: string): string {
         };
 
         if (endpoint.method === 'POST' && payloadInput.value.trim()) {
+          let parsedPayload;
+          try {
+            parsedPayload = JSON.parse(payloadInput.value);
+          } catch {
+            statusEl.textContent = 'Invalid JSON body';
+            return;
+          }
+
           headers['content-type'] = 'application/json';
-          init.body = payloadInput.value;
+          init.body = JSON.stringify(parsedPayload);
         }
 
         statusEl.textContent = 'Requesting...';
@@ -409,10 +653,19 @@ function renderHomePage(origin: string): string {
 }
 
 export default async function homeRoutes(fastify: FastifyInstance): Promise<void> {
+  const projectRoot = process.cwd();
+  const tokens = resolveHomeDesignTokens(projectRoot);
+
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
-    const origin = `${request.protocol}://${request.hostname}`;
+    const hostHeader = typeof request.headers.host === 'string'
+      ? request.headers.host.trim()
+      : '';
+    const origin = hostHeader
+      ? `${request.protocol}://${hostHeader}`
+      : `${request.protocol}://${request.hostname}`;
+
     void reply
       .type('text/html; charset=utf-8')
-      .send(renderHomePage(origin));
+      .send(renderHomePage(origin, tokens));
   });
 }

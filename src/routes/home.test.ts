@@ -29,5 +29,7 @@ describe('home routes', () => {
     expect(response.body).toContain('Live API Explorer');
     expect(response.body).toContain('--color-bg');
     expect(response.body).toContain('/docs');
+    expect(response.body).toContain('http://localhost:3000/v1');
+    expect(response.body).toContain('POST /v1/tools/impermanent-loss/simulate');
   });
 });
