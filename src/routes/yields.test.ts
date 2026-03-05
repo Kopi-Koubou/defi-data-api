@@ -110,6 +110,27 @@ describe('yield routes', () => {
     );
   });
 
+  it('normalizes chain and protocol filters for yield listing', async () => {
+    vi.mocked(yieldService.getLatestYields).mockResolvedValue({
+      yields: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields?chain=SoLaNa&protocol=AAVE-V3',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(yieldService.getLatestYields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chain: 'solana',
+        protocol: 'aave-v3',
+      })
+    );
+  });
+
   it('passes asset and asset-pair filters to top yield service', async () => {
     vi.mocked(yieldService.getLatestYields).mockResolvedValue({
       yields: [],
@@ -129,6 +150,23 @@ describe('yield routes', () => {
         assetPair: 'ETH-USDC',
         sortBy: 'apy',
         limit: 20,
+      })
+    );
+  });
+
+  it('normalizes chain and protocol filters for risk-adjusted yields', async () => {
+    vi.mocked(riskService.getRiskAdjustedYields).mockResolvedValue([]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/risk-adjusted?chain=SoLaNa&protocol=AAVE-V3',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(riskService.getRiskAdjustedYields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chain: 'solana',
+        protocol: 'aave-v3',
       })
     );
   });

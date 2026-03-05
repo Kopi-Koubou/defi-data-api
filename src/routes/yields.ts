@@ -53,6 +53,15 @@ const riskAdjustedQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).optional().default(50),
 });
 
+function normalizeIdentifier(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 export default async function yieldRoutes(fastify: FastifyInstance) {
   // GET /v1/yields - List yields
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -65,7 +74,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
-    const requestedChain = params.chain?.toLowerCase();
+    const requestedChain = normalizeIdentifier(params.chain);
+    const requestedProtocol = normalizeIdentifier(params.protocol);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
       return;
@@ -82,7 +92,7 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
       const { yields, hasMore, nextCursor } = await yieldService.getLatestYields({
         chain: requestedChain,
         chains: tierChainFilter || undefined,
-        protocol: params.protocol,
+        protocol: requestedProtocol,
         asset: params.asset,
         assetPair: params.asset_pair,
         minTvl: params.min_tvl,
@@ -119,7 +129,8 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
     
     const params = parseResult.data;
-    const requestedChain = params.chain?.toLowerCase();
+    const requestedChain = normalizeIdentifier(params.chain);
+    const requestedProtocol = normalizeIdentifier(params.protocol);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
       return;
@@ -136,7 +147,7 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
       const { yields, hasMore, nextCursor } = await yieldService.getLatestYields({
         chain: requestedChain,
         chains: tierChainFilter || undefined,
-        protocol: params.protocol,
+        protocol: requestedProtocol,
         asset: params.asset,
         assetPair: params.asset_pair,
         minTvl: params.min_tvl ?? 100000, // Default $100K min TVL for top
@@ -174,11 +185,17 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
     }
 
     const params = parseResult.data;
+    const requestedChain = normalizeIdentifier(params.chain);
+    const requestedProtocol = normalizeIdentifier(params.protocol);
+    if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
+      Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
+      return;
+    }
 
     try {
       const yields = await riskService.getRiskAdjustedYields({
-        chain: params.chain,
-        protocol: params.protocol,
+        chain: requestedChain,
+        protocol: requestedProtocol,
         asset: params.asset,
         assetPair: params.asset_pair,
         minTvl: params.min_tvl,
