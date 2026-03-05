@@ -69,6 +69,10 @@ vi.mock('../db/index.js', () => ({
   },
 }));
 
+function whereAsString(value: unknown): string {
+  return JSON.stringify(value);
+}
+
 describe('token routes', () => {
   let app: FastifyInstance;
 
@@ -156,5 +160,61 @@ describe('token routes', () => {
     expect(response.statusCode).toBe(403);
     expect(response.json().error.code).toBe('FORBIDDEN');
     expect(dbMocks.findTokenPriceFirst).not.toHaveBeenCalled();
+  });
+
+  it('preserves non-EVM token address casing in search responses', async () => {
+    const solAddress = 'So11111111111111111111111111111111111111112';
+    dbMocks.findPoolsMany.mockResolvedValue([
+      {
+        chainId: 'solana',
+        token0Address: solAddress,
+        token0Symbol: 'SOL',
+        token0Decimals: 9,
+        token1Address: null,
+        token1Symbol: null,
+        token1Decimals: null,
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tokens/search?q=so111',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toHaveLength(1);
+    expect(response.json().data[0].address).toBe(solAddress);
+  });
+
+  it('preserves non-EVM token address casing for detail lookups', async () => {
+    const solAddress = 'So11111111111111111111111111111111111111112';
+    dbMocks.findTokenPriceFirst.mockResolvedValue({
+      tokenAddress: solAddress,
+      chainId: 'solana',
+      timestamp: new Date('2026-03-01T00:00:00.000Z'),
+      priceUsd: 145.12,
+    });
+    dbMocks.findPoolsFirst.mockResolvedValue({
+      chainId: 'solana',
+      token0Address: solAddress,
+      token0Symbol: 'SOL',
+      token0Decimals: 9,
+      token1Address: 'EPjFWdd5AufqSSqeM2qR8V8F6hB6vZXv7fT5r3pJd4',
+      token1Symbol: 'USDC',
+      token1Decimals: 6,
+    });
+    dbMocks.selectDistinctWhere.mockResolvedValue([{ chainId: 'solana' }]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tokens/${solAddress}?chain=solana`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.address).toBe(solAddress);
+
+    const [findPriceArgs] = dbMocks.findTokenPriceFirst.mock.calls[0];
+    const whereText = whereAsString(findPriceArgs.where);
+    expect(whereText).toContain(solAddress);
   });
 });
