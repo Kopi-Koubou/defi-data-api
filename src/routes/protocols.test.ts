@@ -132,4 +132,16 @@ describe('protocol routes', () => {
       ['ethereum', 'arbitrum', 'base']
     );
   });
+
+  it('normalizes protocol id path params before service calls', async () => {
+    vi.mocked(protocolService.getProtocolById).mockResolvedValue(mockProtocol);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/protocols/AAVE-V3',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(protocolService.getProtocolById).toHaveBeenCalledWith('aave-v3', null);
+  });
 });

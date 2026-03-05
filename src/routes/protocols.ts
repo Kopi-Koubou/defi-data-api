@@ -25,6 +25,15 @@ const historyQuerySchema = z.object({
   to: z.string().datetime().optional(),
 });
 
+function normalizeIdentifier(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 export default async function protocolRoutes(fastify: FastifyInstance) {
   // GET /v1/protocols - List all protocols
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -44,13 +53,19 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const normalizedProtocolId = normalizeIdentifier(protocol_id);
     const allowedChains = getAllowedChains(request.apiKey?.tier);
+
+    if (!normalizedProtocolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol id');
+      return;
+    }
     
     try {
-      const protocol = await protocolService.getProtocolById(protocol_id, allowedChains);
+      const protocol = await protocolService.getProtocolById(normalizedProtocolId, allowedChains);
       
       if (!protocol) {
-        const existingProtocol = await protocolService.getProtocolById(protocol_id);
+        const existingProtocol = await protocolService.getProtocolById(normalizedProtocolId);
         if (existingProtocol && allowedChains) {
           Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
           return;
@@ -71,12 +86,21 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id/audit-status', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const normalizedProtocolId = normalizeIdentifier(protocol_id);
     const allowedChains = getAllowedChains(request.apiKey?.tier);
 
+    if (!normalizedProtocolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol id');
+      return;
+    }
+
     try {
-      const auditStatus = await protocolService.getProtocolAuditStatus(protocol_id, allowedChains);
+      const auditStatus = await protocolService.getProtocolAuditStatus(
+        normalizedProtocolId,
+        allowedChains
+      );
       if (!auditStatus) {
-        const existingProtocol = await protocolService.getProtocolById(protocol_id);
+        const existingProtocol = await protocolService.getProtocolById(normalizedProtocolId);
         if (existingProtocol && allowedChains) {
           Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
           return;
@@ -97,6 +121,7 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id/tvl/history', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const normalizedProtocolId = normalizeIdentifier(protocol_id);
     const allowedChains = getAllowedChains(request.apiKey?.tier);
     
     const parseResult = historyQuerySchema.safeParse(request.query);
@@ -118,14 +143,24 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
       Errors.FORBIDDEN(reply, meta, buildHistoryLimitMessage(request.apiKey?.tier));
       return;
     }
+
+    if (!normalizedProtocolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol id');
+      return;
+    }
     
     try {
-      const history = await protocolService.getProtocolTvlHistory(protocol_id, from, to, allowedChains);
+      const history = await protocolService.getProtocolTvlHistory(
+        normalizedProtocolId,
+        from,
+        to,
+        allowedChains
+      );
       
       if (history.length === 0) {
-        const protocol = await protocolService.getProtocolById(protocol_id, allowedChains);
+        const protocol = await protocolService.getProtocolById(normalizedProtocolId, allowedChains);
         if (!protocol) {
-          const existingProtocol = await protocolService.getProtocolById(protocol_id);
+          const existingProtocol = await protocolService.getProtocolById(normalizedProtocolId);
           if (existingProtocol && allowedChains) {
             Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
             return;
@@ -147,15 +182,21 @@ export default async function protocolRoutes(fastify: FastifyInstance) {
   fastify.get('/:protocol_id/pools', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { protocol_id } = request.params as { protocol_id: string };
+    const normalizedProtocolId = normalizeIdentifier(protocol_id);
     const allowedChains = getAllowedChains(request.apiKey?.tier);
+
+    if (!normalizedProtocolId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid protocol id');
+      return;
+    }
     
     try {
-      const pools = await protocolService.getProtocolPools(protocol_id, allowedChains);
+      const pools = await protocolService.getProtocolPools(normalizedProtocolId, allowedChains);
       
       if (pools.length === 0) {
-        const protocol = await protocolService.getProtocolById(protocol_id, allowedChains);
+        const protocol = await protocolService.getProtocolById(normalizedProtocolId, allowedChains);
         if (!protocol) {
-          const existingProtocol = await protocolService.getProtocolById(protocol_id);
+          const existingProtocol = await protocolService.getProtocolById(normalizedProtocolId);
           if (existingProtocol && allowedChains) {
             Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
             return;

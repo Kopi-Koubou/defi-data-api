@@ -48,6 +48,15 @@ interface TokenInfo {
   logoUri: string | null;
 }
 
+function normalizeIdentifier(value: string | undefined): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 export default async function tokenRoutes(fastify: FastifyInstance) {
   // GET /v1/tokens/:address - Get token info
   fastify.get('/:address', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -62,7 +71,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { chain } = parseResult.data;
-    const normalizedChain = chain.toLowerCase();
+    const normalizedChain = normalizeIdentifier(chain) || 'ethereum';
     if (!isChainAllowed(normalizedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
       return;
@@ -170,7 +179,7 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { from, to, chain } = parseResult.data;
-    const normalizedChain = chain.toLowerCase();
+    const normalizedChain = normalizeIdentifier(chain) || 'ethereum';
     if (!isChainAllowed(normalizedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
       return;
@@ -263,14 +272,18 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
     }
     
     const { q, chain } = parseResult.data;
-    const requestedChain = chain?.toLowerCase();
+    const requestedChain = normalizeIdentifier(chain);
     if (requestedChain && !isChainAllowed(requestedChain, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));
       return;
     }
 
     const tierChainFilter = !requestedChain ? getAllowedChains(request.apiKey?.tier) : null;
-    const searchTerm = q.toLowerCase();
+    const searchTerm = q.trim().toLowerCase();
+    if (!searchTerm) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid search query');
+      return;
+    }
     
     try {
       // Search in pools for token0 and token1

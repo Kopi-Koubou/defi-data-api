@@ -34,7 +34,12 @@ export default async function chainRoutes(fastify: FastifyInstance) {
   fastify.get('/:chain_id/tvl', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     const { chain_id } = request.params as { chain_id: string };
-    const normalizedChainId = chain_id.toLowerCase();
+    const normalizedChainId = chain_id.trim().toLowerCase();
+
+    if (!normalizedChainId) {
+      Errors.BAD_REQUEST(reply, meta, 'Invalid chain id');
+      return;
+    }
 
     if (!isChainAllowed(normalizedChainId, request.apiKey?.tier)) {
       Errors.FORBIDDEN(reply, meta, buildChainLimitMessage(request.apiKey?.tier));

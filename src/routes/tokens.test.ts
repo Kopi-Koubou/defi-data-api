@@ -148,6 +148,20 @@ describe('token routes', () => {
     expect(dbMocks.findPoolsMany).not.toHaveBeenCalled();
   });
 
+  it('normalizes chain query for free-tier token search entitlement checks', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tokens/search?q=eth&chain=%20SoLaNa%20',
+      headers: {
+        'x-test-tier': 'free',
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error.code).toBe('FORBIDDEN');
+    expect(dbMocks.findPoolsMany).not.toHaveBeenCalled();
+  });
+
   it('rejects token detail on disallowed chain for free tier', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -216,5 +230,37 @@ describe('token routes', () => {
     const [findPriceArgs] = dbMocks.findTokenPriceFirst.mock.calls[0];
     const whereText = whereAsString(findPriceArgs.where);
     expect(whereText).toContain(solAddress);
+  });
+
+  it('normalizes chain query values for token detail lookups', async () => {
+    const solAddress = 'So11111111111111111111111111111111111111112';
+    dbMocks.findTokenPriceFirst.mockResolvedValue({
+      tokenAddress: solAddress,
+      chainId: 'solana',
+      timestamp: new Date('2026-03-01T00:00:00.000Z'),
+      priceUsd: 145.12,
+    });
+    dbMocks.findPoolsFirst.mockResolvedValue({
+      chainId: 'solana',
+      token0Address: solAddress,
+      token0Symbol: 'SOL',
+      token0Decimals: 9,
+      token1Address: 'EPjFWdd5AufqSSqeM2qR8V8F6hB6vZXv7fT5r3pJd4',
+      token1Symbol: 'USDC',
+      token1Decimals: 6,
+    });
+    dbMocks.selectDistinctWhere.mockResolvedValue([{ chainId: 'solana' }]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tokens/${solAddress}?chain=%20SoLaNa%20`,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const [findPriceArgs] = dbMocks.findTokenPriceFirst.mock.calls[0];
+    const whereText = whereAsString(findPriceArgs.where);
+    expect(whereText).toContain('solana');
+    expect(whereText).not.toContain('SoLaNa');
   });
 });
