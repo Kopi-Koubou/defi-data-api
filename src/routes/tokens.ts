@@ -36,6 +36,9 @@ const searchQuerySchema = z.object({
   chain: z.string().optional(),
 });
 
+const TOKEN_SEARCH_CANDIDATE_POOL_LIMIT = 500;
+const TOKEN_SEARCH_RESULT_LIMIT = 20;
+
 interface TokenInfo {
   address: string;
   chainId: string;
@@ -46,6 +49,10 @@ interface TokenInfo {
   updatedAt: Date | null;
   deployments: string[];
   logoUri: string | null;
+}
+
+interface TokenSearchCandidate extends TokenInfo {
+  matchScore: number;
 }
 
 function normalizeIdentifier(value: string | undefined): string | undefined {
@@ -59,6 +66,52 @@ function normalizeIdentifier(value: string | undefined): string | undefined {
 
 function isEmptyIdentifier(value: string | undefined): boolean {
   return value !== undefined && value.trim().length === 0;
+}
+
+function getTokenSearchMatchScore(symbol: string, address: string, searchTerm: string): number {
+  const normalizedSymbol = symbol.trim().toLowerCase();
+  const normalizedAddress = address.trim().toLowerCase();
+
+  if (normalizedSymbol === searchTerm) {
+    return 100;
+  }
+
+  if (normalizedSymbol.startsWith(searchTerm)) {
+    return 80;
+  }
+
+  if (normalizedSymbol.includes(searchTerm)) {
+    return 60;
+  }
+
+  if (normalizedAddress === searchTerm) {
+    return 40;
+  }
+
+  if (normalizedAddress.startsWith(searchTerm)) {
+    return 20;
+  }
+
+  if (normalizedAddress.includes(searchTerm)) {
+    return 10;
+  }
+
+  return 0;
+}
+
+function upsertTokenCandidate(
+  candidates: Map<string, TokenSearchCandidate>,
+  key: string,
+  token: TokenInfo,
+  matchScore: number
+): void {
+  const existing = candidates.get(key);
+  if (!existing || matchScore > existing.matchScore) {
+    candidates.set(key, {
+      ...token,
+      matchScore,
+    });
+  }
 }
 
 export default async function tokenRoutes(fastify: FastifyInstance) {
@@ -322,26 +375,26 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
           : tierChainFilter
             ? inArray(pools.chainId, tierChainFilter)
             : undefined,
-        limit: 50,
+        limit: TOKEN_SEARCH_CANDIDATE_POOL_LIMIT,
       });
       
       // Extract unique tokens
-      const tokenMap = new Map<string, TokenInfo>();
+      const tokenMap = new Map<string, TokenSearchCandidate>();
       
       for (const pool of poolResults) {
         const token0Address = normalizeAddress(pool.token0Address);
         const token1Address = pool.token1Address ? normalizeAddress(pool.token1Address) : null;
-        const token0AddressForSearch = pool.token0Address.toLowerCase();
-        const token1AddressForSearch = pool.token1Address?.toLowerCase() || null;
-
-        // Token0
-        if (
-          pool.token0Symbol.toLowerCase().includes(searchTerm) ||
-          token0AddressForSearch.includes(searchTerm)
-        ) {
+        const token0MatchScore = getTokenSearchMatchScore(
+          pool.token0Symbol,
+          pool.token0Address,
+          searchTerm
+        );
+        if (token0MatchScore > 0) {
           const key = `${pool.chainId}-${token0Address}`;
-          if (!tokenMap.has(key)) {
-            tokenMap.set(key, {
+          upsertTokenCandidate(
+            tokenMap,
+            key,
+            {
               address: token0Address,
               chainId: pool.chainId,
               symbol: pool.token0Symbol,
@@ -351,20 +404,22 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
               updatedAt: null,
               deployments: [pool.chainId],
               logoUri: null,
-            });
-          }
+            },
+            token0MatchScore
+          );
         }
         
         // Token1
-        if (
-          pool.token1Symbol &&
-          token1Address &&
-          (pool.token1Symbol.toLowerCase().includes(searchTerm) ||
-            Boolean(token1AddressForSearch?.includes(searchTerm)))
-        ) {
+        const token1MatchScore =
+          pool.token1Symbol && token1Address
+            ? getTokenSearchMatchScore(pool.token1Symbol, pool.token1Address || '', searchTerm)
+            : 0;
+        if (pool.token1Symbol && token1Address && token1MatchScore > 0) {
           const key = `${pool.chainId}-${token1Address}`;
-          if (!tokenMap.has(key)) {
-            tokenMap.set(key, {
+          upsertTokenCandidate(
+            tokenMap,
+            key,
+            {
               address: token1Address,
               chainId: pool.chainId,
               symbol: pool.token1Symbol,
@@ -374,12 +429,32 @@ export default async function tokenRoutes(fastify: FastifyInstance) {
               updatedAt: null,
               deployments: [pool.chainId],
               logoUri: null,
-            });
-          }
+            },
+            token1MatchScore
+          );
         }
       }
       
-      const tokens = Array.from(tokenMap.values()).slice(0, 20);
+      const tokens = Array.from(tokenMap.values())
+        .sort((a, b) => {
+          if (b.matchScore !== a.matchScore) {
+            return b.matchScore - a.matchScore;
+          }
+
+          const symbolCompare = a.symbol.localeCompare(b.symbol, 'en', { sensitivity: 'base' });
+          if (symbolCompare !== 0) {
+            return symbolCompare;
+          }
+
+          const chainCompare = a.chainId.localeCompare(b.chainId, 'en', { sensitivity: 'base' });
+          if (chainCompare !== 0) {
+            return chainCompare;
+          }
+
+          return a.address.localeCompare(b.address, 'en', { sensitivity: 'base' });
+        })
+        .slice(0, TOKEN_SEARCH_RESULT_LIMIT)
+        .map(({ matchScore: _matchScore, ...token }) => token);
       
       // Fetch latest prices for found tokens
       if (tokens.length > 0) {

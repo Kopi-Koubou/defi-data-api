@@ -134,6 +134,17 @@ describe('token routes', () => {
     expect(dbMocks.findTokenPriceFirst).not.toHaveBeenCalled();
   });
 
+  it('scans a larger pool candidate set for token search', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tokens/search?q=eth',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [queryArg] = dbMocks.findPoolsMany.mock.calls[0];
+    expect(queryArg.limit).toBe(500);
+  });
+
   it('rejects token search on disallowed chain for free tier', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -230,6 +241,47 @@ describe('token routes', () => {
     const [findPriceArgs] = dbMocks.findTokenPriceFirst.mock.calls[0];
     const whereText = whereAsString(findPriceArgs.where);
     expect(whereText).toContain(solAddress);
+  });
+
+  it('ranks token search results by relevance (exact > prefix > partial)', async () => {
+    dbMocks.findPoolsMany.mockResolvedValue([
+      {
+        chainId: 'ethereum',
+        token0Address: '0x1111111111111111111111111111111111111111',
+        token0Symbol: 'WETH',
+        token0Decimals: 18,
+        token1Address: null,
+        token1Symbol: null,
+        token1Decimals: null,
+      },
+      {
+        chainId: 'ethereum',
+        token0Address: '0x2222222222222222222222222222222222222222',
+        token0Symbol: 'ETHX',
+        token0Decimals: 18,
+        token1Address: null,
+        token1Symbol: null,
+        token1Decimals: null,
+      },
+      {
+        chainId: 'ethereum',
+        token0Address: '0x3333333333333333333333333333333333333333',
+        token0Symbol: 'ETH',
+        token0Decimals: 18,
+        token1Address: null,
+        token1Symbol: null,
+        token1Decimals: null,
+      },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/tokens/search?q=eth',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const symbols = response.json().data.map((token: { symbol: string }) => token.symbol);
+    expect(symbols).toEqual(['ETH', 'ETHX', 'WETH']);
   });
 
   it('normalizes chain query values for token detail lookups', async () => {
