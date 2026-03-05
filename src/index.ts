@@ -13,6 +13,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 
 // Import routes
+import homeRoutes from './routes/home.js';
 import healthRoutes from './routes/health.js';
 import yieldRoutes from './routes/yields.js';
 import protocolRoutes from './routes/protocols.js';
@@ -90,6 +91,7 @@ async function buildServer() {
       },
       security: [{ apiKey: [] }],
       tags: [
+        { name: 'Home', description: 'Landing page and API explorer' },
         { name: 'Yields', description: 'Yield and APY data endpoints' },
         { name: 'Protocols', description: 'Protocol and TVL endpoints' },
         { name: 'Tools', description: 'Calculator and utility endpoints' },
@@ -116,6 +118,7 @@ async function buildServer() {
   });
 
   // Register public routes (no auth required)
+  await fastify.register(homeRoutes);
   await fastify.register(healthRoutes);
 
   // Register authenticated routes with /v1 prefix
@@ -156,11 +159,6 @@ async function buildServer() {
     },
     { prefix: '/v1' }
   );
-
-  // Root route redirect to docs
-  fastify.get('/', async (_, reply) => {
-    return reply.redirect('/docs');
-  });
 
   // 404 handler
   fastify.setNotFoundHandler((request, reply) => {
