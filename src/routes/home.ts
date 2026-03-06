@@ -192,14 +192,15 @@ function resolveHomeDesignTokens(projectRoot: string): HomeDesignTokens {
     tokens.colorAccent = accentOverride;
   }
 
-  tokens.fontHeading = buildFontStack(
-    sanitizeFontName(brand?.fontPairing?.heading),
-    'Georgia, serif'
-  );
-  tokens.fontBody = buildFontStack(
-    sanitizeFontName(brand?.fontPairing?.body),
-    'system-ui, sans-serif'
-  );
+  const headingOverride = sanitizeFontName(brand?.fontPairing?.heading);
+  if (headingOverride) {
+    tokens.fontHeading = buildFontStack(headingOverride, 'Georgia, serif');
+  }
+
+  const bodyOverride = sanitizeFontName(brand?.fontPairing?.body);
+  if (bodyOverride) {
+    tokens.fontBody = buildFontStack(bodyOverride, 'system-ui, sans-serif');
+  }
 
   if (brand?.customTokens && typeof brand.customTokens === 'object') {
     for (const [rawKey, rawValue] of Object.entries(brand.customTokens)) {

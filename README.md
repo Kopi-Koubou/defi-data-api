@@ -37,6 +37,14 @@ After boot:
 - Landing page + live explorer: `http://localhost:3000/`
 - OpenAPI docs: `http://localhost:3000/docs`
 
+### Optional Brand Tokens
+
+The home page reads `brand.json` from the project root (when present) and applies token overrides for:
+- `palette` (`warm-neutral`, `cool-professional`, `bold-minimal`, `dark-premium`)
+- `accentColor`
+- `fontPairing.heading` / `fontPairing.body`
+- `customTokens` mapped to supported CSS token keys (for example `colorBg` or `--color-bg`)
+
 ## Data Ingestion
 
 ```bash
