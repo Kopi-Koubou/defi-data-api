@@ -166,9 +166,13 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
   fastify.get('/top', async (request: FastifyRequest, reply: FastifyReply) => {
     const meta = createResponseMeta();
     
-    const queryParams = { ...(request.query as Record<string, unknown>) };
-    queryParams.sort_by = 'apy';
-    queryParams.limit = 20;
+    const queryParams: Record<string, unknown> = {
+      ...(request.query as Record<string, unknown>),
+      sort_by: 'apy',
+    };
+    if (queryParams.limit === undefined) {
+      queryParams.limit = 20;
+    }
     const parseResult = querySchema.safeParse(queryParams);
     
     if (!parseResult.success) {
@@ -211,7 +215,7 @@ export default async function yieldRoutes(fastify: FastifyInstance) {
         minTvl: params.min_tvl ?? 100000, // Default $100K min TVL for top
         poolType: params.pool_type as PoolType | undefined,
         sortBy: 'apy',
-        limit: 20,
+        limit: params.limit,
         cursor: cursor || undefined,
       });
       

@@ -198,6 +198,27 @@ describe('yield routes', () => {
     );
   });
 
+  it('respects explicit limit overrides for top yields', async () => {
+    vi.mocked(yieldService.getLatestYields).mockResolvedValue({
+      yields: [],
+      hasMore: false,
+      nextCursor: null,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/yields/top?limit=7',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(yieldService.getLatestYields).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sortBy: 'apy',
+        limit: 7,
+      })
+    );
+  });
+
   it('normalizes chain and protocol filters for risk-adjusted yields', async () => {
     vi.mocked(riskService.getRiskAdjustedYields).mockResolvedValue([]);
 
