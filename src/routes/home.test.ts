@@ -43,6 +43,9 @@ describe('home routes', () => {
     expect(response.body).toContain('POST /v1/tools/impermanent-loss/simulate');
     expect(response.body).toContain("--font-heading: 'Source Serif 4', Georgia, serif;");
     expect(response.body).toContain("--font-body: 'DM Sans', system-ui, sans-serif;");
+    expect(response.body).toContain('Skip to content');
+    expect(response.body).toContain('family=DM+Sans:wght@400;500;600;700');
+    expect(response.body).toContain('family=Source+Serif+4:wght@400;500;600;700');
   });
 
   it('keeps default body font when only heading font is overridden via brand.json', async () => {
@@ -74,5 +77,6 @@ describe('home routes', () => {
     expect(response.body).toContain('--color-accent: #1f7a5f;');
     expect(response.body).toContain("--font-heading: 'Fraunces', Georgia, serif;");
     expect(response.body).toContain("--font-body: 'DM Sans', system-ui, sans-serif;");
+    expect(response.body).toContain('family=Fraunces:wght@400;500;600;700');
   });
 });

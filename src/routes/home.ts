@@ -164,6 +164,65 @@ function buildFontStack(fontName: string | null, fallback: string): string {
   return `'${fontName}', ${fallback}`;
 }
 
+function extractPrimaryFontFamily(fontStack: string): string | null {
+  const normalized = fontStack.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const quotedMatch = normalized.match(/^['"]([^'"]+)['"]/);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1];
+  }
+
+  const firstSegment = normalized.split(',')[0]?.trim() || '';
+  if (!firstSegment) {
+    return null;
+  }
+
+  const cleanSegment = firstSegment.replace(/^['"]|['"]$/g, '');
+  const genericFamilies = new Set([
+    'serif',
+    'sans-serif',
+    'monospace',
+    'system-ui',
+    'ui-serif',
+    'ui-sans-serif',
+    'ui-monospace',
+  ]);
+
+  if (genericFamilies.has(cleanSegment.toLowerCase())) {
+    return null;
+  }
+
+  return cleanSegment;
+}
+
+function isSafeFontFamily(value: string): boolean {
+  return /^[a-zA-Z0-9\s-]+$/.test(value);
+}
+
+function buildGoogleFontsHref(tokens: HomeDesignTokens): string {
+  const families = new Set<string>(['DM Sans', 'Source Serif 4']);
+
+  const headingFont = extractPrimaryFontFamily(tokens.fontHeading);
+  const bodyFont = extractPrimaryFontFamily(tokens.fontBody);
+
+  if (headingFont && isSafeFontFamily(headingFont)) {
+    families.add(headingFont);
+  }
+
+  if (bodyFont && isSafeFontFamily(bodyFont)) {
+    families.add(bodyFont);
+  }
+
+  const query = Array.from(families)
+    .map((family) => `family=${family.trim().split(/\s+/).join('+')}:wght@400;500;600;700`)
+    .join('&');
+
+  return `https://fonts.googleapis.com/css2?${query}&display=swap`;
+}
+
 function resolveProjectBrandConfig(projectRoot: string): HomeBrandConfig | null {
   try {
     const brandPath = join(projectRoot, 'brand.json');
@@ -221,6 +280,7 @@ function resolveHomeDesignTokens(projectRoot: string): HomeDesignTokens {
 
 function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
   const baseApiUrl = `${origin}/v1`;
+  const googleFontsHref = buildGoogleFontsHref(tokens);
 
   return `<!doctype html>
 <html lang="en">
@@ -230,7 +290,7 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
     <title>DeFi Data API</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet" />
+    <link href="${googleFontsHref}" rel="stylesheet" />
     <style>
       :root {
         --color-bg: ${tokens.colorBg};
@@ -253,6 +313,9 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
         --space-8: 32px;
         --space-12: 48px;
         --space-16: 64px;
+        --duration-fast: 150ms;
+        --duration-normal: 250ms;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
       }
 
       * {
@@ -266,6 +329,24 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
         font-family: var(--font-body);
         font-size: 16px;
         line-height: 1.55;
+      }
+
+      .skip-link {
+        position: absolute;
+        left: var(--space-4);
+        top: -200px;
+        padding: var(--space-2) var(--space-3);
+        border-radius: 8px;
+        background: var(--color-surface);
+        color: var(--color-text);
+        border: 1px solid var(--color-border);
+        text-decoration: none;
+      }
+
+      .skip-link:focus-visible {
+        top: var(--space-4);
+        outline: 3px solid var(--color-accent);
+        outline-offset: 2px;
       }
 
       .layout {
@@ -301,10 +382,19 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
         border: 1px solid var(--color-border);
         border-radius: 8px;
         padding: var(--space-2) var(--space-3);
+        transition:
+          border-color var(--duration-fast) var(--ease-out),
+          background-color var(--duration-fast) var(--ease-out),
+          transform var(--duration-fast) var(--ease-out);
       }
 
       .link:hover {
         border-color: var(--color-accent);
+        background: var(--color-accent-soft);
+      }
+
+      .link:active {
+        transform: scale(0.98);
       }
 
       .hero {
@@ -392,6 +482,9 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
         background: var(--color-input-bg);
         color: var(--color-text);
         padding: var(--space-3);
+        transition:
+          border-color var(--duration-fast) var(--ease-out),
+          box-shadow var(--duration-fast) var(--ease-out);
       }
 
       textarea {
@@ -406,7 +499,7 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
       textarea:focus-visible,
       button:focus-visible,
       .link:focus-visible {
-        outline: 2px solid var(--color-accent);
+        outline: 3px solid var(--color-accent);
         outline-offset: 2px;
       }
 
@@ -419,6 +512,13 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
         color: var(--color-button-text);
         font-weight: 600;
         cursor: pointer;
+        transition:
+          filter var(--duration-fast) var(--ease-out),
+          transform var(--duration-fast) var(--ease-out);
+      }
+
+      .button:hover {
+        filter: brightness(1.06);
       }
 
       .button:active {
@@ -466,10 +566,26 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
           align-items: flex-start;
         }
       }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0ms !important;
+          transition-duration: 0ms !important;
+          scroll-behavior: auto !important;
+        }
+
+        .button:active,
+        .link:active {
+          transform: none;
+        }
+      }
     </style>
   </head>
   <body>
-    <main class="layout">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <main id="main-content" class="layout">
       <header class="nav">
         <h1 class="brand">DeFi Data API</h1>
         <div class="nav-links">
