@@ -44,6 +44,25 @@ describe('DefiDataApiClient', () => {
     expect(new Headers(init.headers).get('x-api-key')).toBe('builder-key');
   });
 
+  it('allows explicit top-yield limit overrides', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(buildSuccessResponse([{ poolId: 'pool-1' }]));
+    const client = new DefiDataApiClient({
+      apiKey: 'builder-key',
+      baseUrl: 'https://api.example.com/v1',
+      fetchImpl: fetchMock,
+    });
+
+    await client.getTopYields({
+      chain: 'ethereum',
+      min_tvl: 200000,
+      limit: 7,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.example.com/v1/yields/top?chain=ethereum&min_tvl=200000&limit=7');
+    expect(init.method).toBe('GET');
+  });
+
   it('sends json payloads for POST requests', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(buildSuccessResponse({ ok: true }));
     const client = new DefiDataApiClient({

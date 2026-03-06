@@ -12,6 +12,7 @@ import type {
   TokenLookupParams,
   TokenPriceHistoryParams,
   TokenSearchParams,
+  TopYieldsParams,
   YieldHistoryParams,
   YieldListParams,
 } from './types.js';
@@ -169,7 +170,7 @@ export class DefiDataApiClient {
     return this.request<T>('GET', '/yields', params);
   }
 
-  getTopYields<T = unknown>(params?: Omit<YieldListParams, 'sort_by' | 'limit'>): Promise<ApiResponse<T>> {
+  getTopYields<T = unknown>(params?: TopYieldsParams): Promise<ApiResponse<T>> {
     return this.request<T>('GET', '/yields/top', params);
   }
 

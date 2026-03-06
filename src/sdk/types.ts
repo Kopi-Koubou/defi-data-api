@@ -49,6 +49,8 @@ export interface YieldListParams {
   cursor?: string;
 }
 
+export type TopYieldsParams = Omit<YieldListParams, 'sort_by'>;
+
 export interface YieldHistoryParams {
   from?: string;
   to?: string;
