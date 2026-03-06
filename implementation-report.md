@@ -1,29 +1,28 @@
 # Implementation Report
 
 ## Summary
-- Read `PRD.md` before coding. `design-spec.md` and `tech-spec.md` are not present in `/Users/devl/clawd/projects/defi-data-api`, so implementation was scoped from PRD + current code behavior.
-- Checked for `/Users/devl/clawd/projects/defi-data-api/brand.json`; no file currently exists.
-- Implemented scoped landing-page and explorer improvements:
-  - Added optional `brand.json` token overrides for home route design tokens (palette, accent color, font pairing, and custom token overrides).
-  - Fixed base URL generation to include host port from request headers (for accurate quick-start and footer URLs).
-  - Added `POST /v1/tools/impermanent-loss/simulate` to the live API explorer with a realistic default JSON payload and client-side JSON validation.
-  - Updated landing page test assertions for the new base URL behavior and POST explorer endpoint.
-- Ran test and build validation; both pass.
+- Read `PRD.md` before coding. `design-spec.md` and `tech-spec.md` are not present in `/Users/devl/clawd/projects/defi-data-api`, so scope was inferred from PRD and existing implementation/tests.
+- Checked for `/Users/devl/clawd/projects/defi-data-api/brand.json`; no file exists in this workspace.
+- Implemented scoped home-theming hardening:
+  - Fixed `brand.json` font override behavior so default premium fonts are preserved when font overrides are missing or partial.
+  - Added home route tests for default token/font rendering and partial `brand.json` font override behavior.
+  - Documented `brand.json` token override support in README.
+- Validated with full test suite and TypeScript build.
 
 ## Changed Files
 - `src/routes/home.ts`
 - `src/routes/home.test.ts`
+- `README.md`
 - `implementation-report.md`
 
 ## Tests Run
-- `npm test` (pass: 17 files, 101 tests)
+- `npm test` (pass: 17 files, 102 tests)
 - `npm run build` (pass)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` are still missing, so acceptance criteria are inferred from PRD and existing implementation patterns.
-- `brand.json` overrides are validated defensively, but there is no dedicated unit test suite yet for all brand override permutations.
+- `design-spec.md` and `tech-spec.md` are still missing, so acceptance criteria are inferred rather than validated against explicit artifacts.
+- `brand.json` `customTokens` only apply to supported mapped token keys; unknown keys are intentionally ignored.
 
 ## Next Steps
-1. Add `design-spec.md` and `tech-spec.md` artifacts so feature acceptance can be validated against explicit scope definitions.
-2. Add focused tests for `brand.json` overrides (palette, accent, font pairing, custom token mapping).
-3. Add a short README note documenting supported `brand.json` keys for home page theming.
+1. Add `design-spec.md` and `tech-spec.md` to remove ambiguity in scoped acceptance criteria.
+2. Add tests for additional `brand.json` permutations (palette presets + mapped `customTokens` overrides).
