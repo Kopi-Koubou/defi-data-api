@@ -43,7 +43,7 @@ The home page reads `brand.json` from the project root (when present) and applie
 - `palette` (`warm-neutral`, `cool-professional`, `bold-minimal`, `dark-premium`)
 - `accentColor`
 - `fontPairing.heading` / `fontPairing.body`
-- `customTokens` mapped to supported CSS token keys (for example `colorBg` or `--color-bg`)
+- `customTokens` for any safe CSS variable override (for example `colorBg`, `--color-bg`, or `space20`)
 
 ## Data Ingestion
 

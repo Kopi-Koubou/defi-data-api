@@ -79,4 +79,38 @@ describe('home routes', () => {
     expect(response.body).toContain("--font-body: 'DM Sans', system-ui, sans-serif;");
     expect(response.body).toContain('family=Fraunces:wght@400;500;600;700');
   });
+
+  it('applies safe custom token overrides from brand.json', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'defi-data-api-home-'));
+    tempDirs.push(tempDir);
+
+    writeFileSync(
+      join(tempDir, 'brand.json'),
+      JSON.stringify({
+        customTokens: {
+          colorBg: '#f6f1ea',
+          '--space-20': '80px',
+          customHeroGap: '40px',
+          'invalid;name': '12px',
+        },
+      })
+    );
+    process.chdir(tempDir);
+
+    await app.register(homeRoutes);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/',
+      headers: {
+        host: 'localhost:3000',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('--color-bg: #f6f1ea;');
+    expect(response.body).toContain('--space-20: 80px;');
+    expect(response.body).toContain('--custom-hero-gap: 40px;');
+    expect(response.body).not.toContain('--invalid;name');
+  });
 });

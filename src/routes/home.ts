@@ -27,6 +27,11 @@ interface HomeDesignTokens {
   fontBody: string;
 }
 
+interface ResolvedHomeDesignTokens {
+  tokens: HomeDesignTokens;
+  customCssVariables: Record<string, string>;
+}
+
 const DEFAULT_TOKENS: HomeDesignTokens = {
   colorBg: '#f8f7f4',
   colorSurface: '#fffdfa',
@@ -120,6 +125,10 @@ function toCssVariableName(key: string): string {
   return normalized.startsWith('--')
     ? normalized
     : `--${normalized.replace(/_/g, '-').replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+}
+
+function isSafeCssVariableName(value: string): boolean {
+  return /^--[a-zA-Z0-9-]+$/.test(value);
 }
 
 function sanitizeCssValue(value: unknown): string | null {
@@ -238,13 +247,14 @@ function resolveProjectBrandConfig(projectRoot: string): HomeBrandConfig | null 
   }
 }
 
-function resolveHomeDesignTokens(projectRoot: string): HomeDesignTokens {
+function resolveHomeDesignTokens(projectRoot: string): ResolvedHomeDesignTokens {
   const brand = resolveProjectBrandConfig(projectRoot);
   const paletteTokens = brand?.palette ? PALETTE_TOKENS[brand.palette] || {} : {};
   const tokens: HomeDesignTokens = {
     ...DEFAULT_TOKENS,
     ...paletteTokens,
   };
+  const customCssVariables: Record<string, string> = {};
 
   const accentOverride = sanitizeCssValue(brand?.accentColor);
   if (accentOverride) {
@@ -264,23 +274,32 @@ function resolveHomeDesignTokens(projectRoot: string): HomeDesignTokens {
   if (brand?.customTokens && typeof brand.customTokens === 'object') {
     for (const [rawKey, rawValue] of Object.entries(brand.customTokens)) {
       const cssVariable = toCssVariableName(rawKey);
-      const tokenKey = TOKEN_KEY_MAP[cssVariable];
       const tokenValue = sanitizeCssValue(rawValue);
+      const tokenKey = TOKEN_KEY_MAP[cssVariable];
 
-      if (!tokenKey || !tokenValue) {
+      if (!tokenValue || !isSafeCssVariableName(cssVariable)) {
         continue;
       }
 
-      tokens[tokenKey] = tokenValue;
+      if (tokenKey) {
+        tokens[tokenKey] = tokenValue;
+        continue;
+      }
+
+      customCssVariables[cssVariable] = tokenValue;
     }
   }
 
-  return tokens;
+  return { tokens, customCssVariables };
 }
 
-function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
+function renderHomePage(origin: string, designTokens: ResolvedHomeDesignTokens): string {
+  const { tokens, customCssVariables } = designTokens;
   const baseApiUrl = `${origin}/v1`;
   const googleFontsHref = buildGoogleFontsHref(tokens);
+  const customCssVariablesBlock = Object.entries(customCssVariables)
+    .map(([key, value]) => `        ${key}: ${value};`)
+    .join('\n');
 
   return `<!doctype html>
 <html lang="en">
@@ -316,7 +335,7 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
         --duration-fast: 150ms;
         --duration-normal: 250ms;
         --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-      }
+${customCssVariablesBlock ? `${customCssVariablesBlock}\n` : ''}      }
 
       * {
         box-sizing: border-box;
@@ -771,7 +790,7 @@ function renderHomePage(origin: string, tokens: HomeDesignTokens): string {
 
 export default async function homeRoutes(fastify: FastifyInstance): Promise<void> {
   const projectRoot = process.cwd();
-  const tokens = resolveHomeDesignTokens(projectRoot);
+  const designTokens = resolveHomeDesignTokens(projectRoot);
 
   fastify.get('/', async (request: FastifyRequest, reply: FastifyReply) => {
     const hostHeader = typeof request.headers.host === 'string'
@@ -783,6 +802,6 @@ export default async function homeRoutes(fastify: FastifyInstance): Promise<void
 
     void reply
       .type('text/html; charset=utf-8')
-      .send(renderHomePage(origin, tokens));
+      .send(renderHomePage(origin, designTokens));
   });
 }
