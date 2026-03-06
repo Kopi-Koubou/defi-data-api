@@ -1,36 +1,32 @@
 # Implementation Report
 
 ## Summary
-- Read `PRD.md` before coding; `design-spec.md` and `tech-spec.md` were not found in `/Users/devl/clawd/projects/defi-data-api`, so scope was inferred from the PRD plus existing implementation/test coverage.
-- Checked for `/Users/devl/clawd/projects/defi-data-api/brand.json`; no file exists, so default warm-neutral design tokens remain in effect.
-- Implemented scoped feature updates:
-  - Updated `GET /v1/yields/top` to keep default `limit=20` while honoring explicit client `limit` overrides.
-  - Added route coverage to verify top-yield explicit limit behavior.
-  - Upgraded the landing page implementation to align better with premium UI constraints and accessibility:
-    - Dynamic Google Font loading for configured brand/default heading/body fonts.
-    - Added skip link and `id` target for keyboard navigation.
-    - Upgraded focus-visible rings to 3px with offset.
-    - Added restrained hover/active transitions and reduced-motion handling.
-  - Added/updated tests validating the new home page font-link and accessibility markup behavior.
+- Read `PRD.md` before coding. `design-spec.md` and `tech-spec.md` are not present in `/Users/devl/clawd/projects/defi-data-api`, so implementation was validated against the PRD scope plus current route/SDK behavior.
+- Checked for `/Users/devl/clawd/projects/defi-data-api/brand.json`; no file exists, so the warm-neutral defaults remain active.
+- Implemented scoped parity and branding updates:
+  - SDK now supports explicit `limit` overrides for `GET /v1/yields/top`.
+  - Home page brand token resolution now accepts any safe CSS variable from `brand.json.customTokens` (not only a fixed mapped subset), while keeping sanitization.
+  - Added test coverage for both updates and updated README token override guidance.
 
 ## Changed Files
-- `src/routes/yields.ts`
-- `src/routes/yields.test.ts`
+- `src/sdk/types.ts`
+- `src/sdk/client.ts`
+- `src/sdk/client.test.ts`
 - `src/routes/home.ts`
 - `src/routes/home.test.ts`
+- `README.md`
 - `implementation-report.md`
 
 ## Tests Run
-- `./node_modules/.bin/vitest run src/routes/yields.test.ts` (pass: 1 file, 17 tests)
-- `./node_modules/.bin/vitest run src/routes/home.test.ts` (pass: 1 file, 2 tests)
-- `./node_modules/.bin/vitest run` (pass: 17 files, 103 tests)
+- `./node_modules/.bin/vitest run src/sdk/client.test.ts src/routes/home.test.ts` (pass: 2 files, 11 tests)
+- `npm test` (pass: 17 files, 105 tests)
 - `npm run build` (pass)
 
 ## Known Risks
-- `design-spec.md` and `tech-spec.md` are still missing, so acceptance criteria were inferred rather than validated against explicit stage artifacts.
-- Custom font loading depends on Google Fonts availability; unsupported or blocked font families will gracefully fall back to the token fallback stacks.
+- `design-spec.md` and `tech-spec.md` are still missing, so acceptance criteria could not be cross-checked against those stage artifacts.
+- `brand.json.customTokens` now supports arbitrary safe CSS variables; invalid variable names/values are ignored by design, which could hide typo mistakes in brand configs.
 
 ## Next Steps
-1. Add `design-spec.md` and `tech-spec.md` so feature acceptance can be validated against explicit scoped artifacts.
-2. Add API-level integration coverage for `/v1/yields/top` pagination and limit behavior with live DB fixtures.
-3. Add one browser-level smoke test for landing page accessibility hooks (skip link + focus-visible states).
+1. Add `design-spec.md` and `tech-spec.md` into the repo so scope validation can be explicit.
+2. Add an automated validation script for `brand.json` to surface ignored/invalid token keys during CI.
+3. Add SDK docs/examples showing `getTopYields({ limit })` usage.
