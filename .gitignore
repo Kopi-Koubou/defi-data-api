@@ -47,3 +47,5 @@ Thumbs.db
 .temp/
 tmp/
 agent.pid
+.vercel
+.env*.local
